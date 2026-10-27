@@ -337,7 +337,7 @@ class PCAPAnalyzer {
     // ==================== THEME MANAGEMENT ====================
 
     initTheme() {
-        const savedTheme = localStorage.getItem('pcap-theme') || 'dark';
+        const savedTheme = localStorage.getItem('pcap-theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
         this.updateThemeIcons(savedTheme);
         const savedUiStyle = localStorage.getItem('pcap-ui-style') || 'default';

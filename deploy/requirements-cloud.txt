@@ -45,3 +45,7 @@ httpx==0.28.1
 
 vercel-blob==0.5.0
 vercel-queue==0.10.0
+
+msal==1.39.0
+PyJWT[crypto]==2.15.1
+psycopg[binary]==3.3.6

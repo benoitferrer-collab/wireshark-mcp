@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark" data-ui-style="default">
+<html lang="fr" data-theme="light" data-ui-style="default">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }} - Analyse PCAP Professionnelle</title>
+    <title>Nomios PcapAnalyzer — Espace d’analyse</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ assets_version.style_css }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -248,9 +248,24 @@
             color: var(--accent);
         }
     </style>
+<link rel="stylesheet" href="/static/css/nomios.css?v={{ assets_version.nomios_css }}">
 </head>
 
 <body>
+<aside class="nomios-sidebar" aria-label="Navigation principale">
+<a class="nomios-brand" href="/"><img src="/static/img/nomios.png" alt="Logo Nomios"><span><strong>Nomios<span class="brand-point">.</span></strong><small>PcapAnalyzer</small></span></a>
+<div class="nomios-workspace"><span>NL</span><strong>Nomios Lab</strong><small>Espace partagé</small></div>
+<p class="nav-label">ESPACE D’ANALYSE</p><nav>
+<button type="button" data-nomios-view="workspace" class="selected"><span>▦</span> Vue d’ensemble</button>
+<button type="button" data-nomios-view="captures"><span>▤</span> Captures</button>
+<button type="button" data-nomios-module="multi-pcap"><span>▱</span> Multi-PCAP</button>
+</nav><p class="nav-label">INVESTIGATION</p><nav>
+<button type="button" data-nomios-module="overview"><span>⌁</span> Vue globale</button>
+<button type="button" data-nomios-module="tcp-health"><span>↝</span> Performance TCP</button>
+<button type="button" data-nomios-module="packets"><span>▣</span> Paquets & couches OSI</button>
+</nav><nav class="nomios-sidebar-bottom"><button type="button" data-nomios-view="assistants"><span>✧</span> Assistants IA</button><button type="button" data-nomios-view="admin" id="nomiosAdminNav" hidden><span>⚙</span> Administration</button></nav>
+<div class="nomios-user"><span class="nomios-avatar">N</span><div><strong id="nomiosUserName">Espace d’analyse</strong><small id="nomiosUserStatus">Connexion au serveur</small></div><button type="button" id="nomiosLogout" hidden title="Se déconnecter">↪</button></div>
+</aside>
     <!-- Particle Background -->
     <canvas id="particleCanvas" class="particle-canvas"></canvas>
     <div class="app-container">
@@ -261,12 +276,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5" />
-                        <path d="M2 12l10 5 10-5" />
-                    </svg>
-                    <h1>{{ app_name }}</h1>
+<span class="nomios-header-label">Espace d’analyse</span><span class="nomios-header-separator">/</span><h1>Nomios PcapAnalyzer</h1>
                 </div>
                 <div class="header-info">
                     <span class="version">v{{ version }}</span>
@@ -325,18 +335,28 @@
 
         <!-- Main Content -->
         <main class="main-content">
+<section id="nomiosAssistants" class="nomios-page" hidden aria-labelledby="nomiosAssistantsTitle">
+<div class="nomios-page-heading"><div><p class="nav-label">ASSISTANTS IA</p><h2 id="nomiosAssistantsTitle">Votre expertise, augmentée.</h2><p>Consultez l’activité réelle des assistants qui explorent vos analyses.</p></div><button class="btn btn-primary" id="nomiosRefreshActivity">Actualiser</button></div>
+<div class="nomios-info"><span>↗</span><div><strong>Passerelle MCP</strong><code id="nomiosMcpEndpoint"></code><small>Lecture des analyses · authentification Microsoft Entra ID</small></div></div>
+<p id="nomiosActivityMessage" role="status">Chargement de l’activité…</p><div id="nomiosAssistantCards" class="nomios-assistant-grid"></div>
+<div class="card nomios-events"><h3>Derniers appels d’outils</h3><p>Un appel d’outil MCP est une requête. Les messages dans Claude et les initialisations ne sont pas comptabilisés. Horaires UTC.</p><div class="table-wrapper"><table><thead><tr><th>Date UTC</th><th>Assistant</th><th>Outil</th><th>Résultat</th><th>Durée</th></tr></thead><tbody id="nomiosActivityRows"></tbody></table></div></div>
+<p class="nomios-footnote">L’activité récente correspond à un appel reçu dans les 15 dernières minutes ; elle ne garantit pas qu’une session distante reste ouverte. Historique conservé 30 jours, sans contenu de capture ni conversation.</p>
+</section>
+<section id="nomiosAdmin" class="nomios-page" hidden aria-labelledby="nomiosAdminTitle"><div class="nomios-page-heading"><div><p class="nav-label">ADMINISTRATION</p><h2 id="nomiosAdminTitle">Un accès maîtrisé.</h2><p>Réservez l’espace d’analyse à votre groupe Microsoft Entra ID.</p></div></div>
+<div class="card nomios-admin-card"><h3>Accès Microsoft Entra ID</h3><label>Tenant<input id="nomiosTenant" readonly></label><form id="nomiosGroupForm"><label>Object ID du groupe autorisé<input id="nomiosGroupId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off"></label><p>Les membres du groupe partagent les captures et analyses de cet espace. Un champ vide réserve l’accès à l’administrateur.</p><button class="btn btn-primary" type="submit">Enregistrer le groupe</button><p id="nomiosGroupMessage" role="status"></p></form></div></section>
             <!-- Upload Section -->
             <section class="upload-section" id="uploadSection">
                 <div class="premium-intro">
-                    <p class="premium-intro-kicker">Network Forensics Suite</p>
-                    <h2 class="premium-intro-title">Détectez, priorisez, investiguez le trafic en profondeur.</h2>
-                    <p class="premium-intro-subtitle">Pipeline SOC prêt à l'emploi: upload, corrélation protocolaire, IA et exports DFIR.</p>
+                    <p class="premium-intro-kicker">NOMIOS PCAPANALYZER</p>
+                    <h2 class="premium-intro-title">Votre réseau, en clair.</h2>
+                    <p class="premium-intro-subtitle">Importez vos captures, explorez les preuves et remontez à la source des incidents.</p>
                     <div class="premium-intro-badges">
                         <span>TCP Deep Analysis</span>
                         <span>Threat Intel</span>
                         <span>AI Copilot</span>
                     </div>
                 </div>
+                <div class="nomios-upload-layout"><div>
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -354,6 +374,7 @@
                     <button class="btn btn-secondary" id="openMultiPcapMode">🧩 Ouvrir le mode Multi-PCAP</button>
                 </div>
 
+                </div><aside class="nomios-copilot"><div class="copilot-kicker">✧ VOTRE COPILOTE D’INVESTIGATION</div><h3>Des preuves.<br>Des réponses.</h3><p>Explorez vos analyses depuis Claude avec votre passerelle MCP. Les outils vous aident à relier symptômes, sessions et paquets.</p><button type="button" data-nomios-view="assistants">Gérer mes assistants <span aria-hidden="true">→</span></button><small>Consultez les derniers appels et les compteurs dans Assistants IA.</small></aside></div>
                 <!-- Progress -->
                 <div class="progress-container" id="progressContainer" style="display: none;">
                     <div class="progress-header">
@@ -371,8 +392,8 @@
             <section class="results-section" id="resultsSection" style="display: none;">
                 <div class="card premium-hero">
                     <div class="premium-hero-copy">
-                        <p class="premium-hero-kicker">Command Center</p>
-                        <h2>Analyse PCAP en direct</h2>
+                        <p class="premium-hero-kicker">DOSSIER D’INVESTIGATION</p>
+                        <h2>L’investigation, sans angle mort.</h2>
                         <p id="analysisMetaLabel">Résultats consolidés et prêts pour investigation.</p>
                     </div>
                     <div class="premium-hero-signals">
@@ -573,6 +594,7 @@
                 </div>
 
                 <!-- Tab Navigation -->
+                <div class="nomios-analysis-layout">
                 <div class="tabs-container">
                     <div class="tabs">
                         <span class="tabs-active-pill" id="tabsActivePill" aria-hidden="true"></span>
@@ -1997,6 +2019,7 @@
 
                 <!-- ========== (End of advanced tab panels) ========== -->
 
+                </div><!-- nomios-analysis-layout -->
                 <!-- New Analysis Button -->
                 <div class="new-analysis">
                     <button class="btn btn-secondary" id="newAnalysisBtn">
@@ -2102,7 +2125,7 @@
         <!-- Footer -->
         <footer class="footer">
             <div class="footer-content">
-                <p>&copy; 2025 {{ app_name }} - Analyse PCAP pour SOC et Ingénierie Réseau</p>
+                <p>Nomios PcapAnalyzer · Vos captures. Vos preuves. Votre analyse.</p>
                 <div class="footer-badges">
                     <span class="footer-badge">🐳 Docker</span>
                     <span class="footer-badge">🤖 Ollama</span>
@@ -2118,6 +2141,7 @@
         <script defer src="/static/js/connection.js?v={{ assets_version.connection_js }}"></script>
         <script defer src="/static/js/advanced_features.js?v={{ assets_version.advanced_features_js }}"></script>
         <script defer src="/static/js/app.js?v={{ assets_version.app_js }}"></script>
+        <script defer src="/static/js/identity-ui.js?v={{ assets_version.identity_ui_js }}"></script>
 </body>
 
 </html>

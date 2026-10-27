@@ -8,6 +8,11 @@ from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from .auth import OAuthTokenVerifier
+from .activity import ActivityFastMCP, backend_sink
+import os
+import hmac
+from starlette.responses import JSONResponse
+import httpx
 from .backend import BackendClient, bounded_result
 from .config import GatewaySettings
 from .policy import page_value
@@ -23,8 +28,9 @@ def task_path(task_id: str) -> str:
 
 def create_server(settings, backend=None, verifier=None):
     backend = backend or BackendClient(settings)
-    server = FastMCP(
-        'PCAP Analyzer Pro', host='0.0.0.0', port=settings.port,
+    server = ActivityFastMCP(
+        'PCAP Analyzer Pro',
+        activity_sink=backend_sink(settings) if os.getenv("MCP_ACTIVITY_ENABLED") == "true" else None, host='0.0.0.0', port=settings.port,
         json_response=True, stateless_http=True,
         instructions=(
             'Investigate stored PCAP evidence. Start with list_analyses and get_analysis_summary. '
@@ -47,6 +53,22 @@ def create_server(settings, backend=None, verifier=None):
             allowed_origins=[f'https://{urlparse(settings.public_url).netloc}'],
         ),
     )
+
+    @server.custom_route('/mcp/activity-health', methods=['GET'])
+    async def activity_health(request):
+        expected='Bearer '+settings.backend_token
+        if not hmac.compare_digest(request.headers.get('authorization',''),expected):
+            return JSONResponse({'detail':'Server authorization required'},status_code=401)
+        state='disabled'
+        if os.getenv('MCP_ACTIVITY_ENABLED')=='true':
+            try:
+                async with httpx.AsyncClient(timeout=2,follow_redirects=False) as client:
+                    response=await client.post(settings.backend_url+'/api/identity/internal/activity-probe',headers={'Authorization':expected})
+                    response.raise_for_status()
+                state='available'
+            except Exception:
+                state='unavailable'
+        return JSONResponse({'state':state},headers={'Cache-Control':'no-store'})
 
     async def evidence(path, params=None, task_id=None):
         return bounded_result(await backend.get(path, params), source=path, task_id=task_id)

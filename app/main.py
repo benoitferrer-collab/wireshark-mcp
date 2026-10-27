@@ -96,10 +96,21 @@ class CachedStaticFiles(StaticFiles):
 @app.get('/static/js/runtime-config.js', include_in_schema=False)
 async def runtime_config():
     import json
-    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE}
+    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE and not WEB_IDENTITY, 'webAuth': bool(WEB_IDENTITY)}
     return Response('window.PCAP_CONFIG = ' + json.dumps(config) + ';',
                     media_type='application/javascript', headers={'Cache-Control': 'no-store'})
 
+
+# Identity is opt-in, with mandatory complete configuration when enabled.
+from app.identity.settings import WebSettings
+WEB_IDENTITY = WebSettings.from_env()
+if WEB_IDENTITY:
+    from app.identity.store import IdentityStore
+    from app.identity.web import EntraProvider, WebIdentityMiddleware, create_identity_router
+    identity_store = IdentityStore(WEB_IDENTITY.database_url, WEB_IDENTITY.encryption_key)
+    identity_provider = EntraProvider(WEB_IDENTITY)
+    app.include_router(create_identity_router(WEB_IDENTITY, identity_store, identity_provider))
+    app.add_middleware(WebIdentityMiddleware, settings=WEB_IDENTITY, store=identity_store, provider=identity_provider)
 
 static_path = Path(__file__).parent.parent / "static"
 app.mount("/static", CachedStaticFiles(directory=str(static_path)), name="static")
@@ -134,6 +145,8 @@ async def root(request: Request):
         return int(path.stat().st_mtime) if path.exists() else settings.app_version
 
     assets_version = {
+        "nomios_css": _asset_version("css", "nomios.css"),
+        "identity_ui_js": _asset_version("js", "identity-ui.js"),
         "advanced_features_js": _asset_version("js", "advanced_features.js"),
         "app_js": _asset_version("js", "app.js"),
         "connection_js": _asset_version("js", "connection.js"),
