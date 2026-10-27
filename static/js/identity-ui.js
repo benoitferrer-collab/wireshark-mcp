@@ -12,11 +12,34 @@
   activeView=name;
   document.querySelector('.main-content').classList.toggle('nomios-secondary-view',['assistants','admin'].includes(name));
   $('nomiosAssistants').hidden=name!=='assistants';$('nomiosAdmin').hidden=name!=='admin';
-  document.querySelectorAll('[data-nomios-view]').forEach(button=>button.classList.toggle('selected',button.dataset.nomiosView===name));
-  if(name==='captures')document.querySelector('.history-section').scrollIntoView({behavior:'smooth'});
+ document.querySelectorAll('[data-nomios-view]').forEach(button=>button.classList.toggle('selected',button.dataset.nomiosView===name));
+  document.querySelector('.nomios-sidebar').classList.toggle('is-library',name==='captures');
+  if(name==='captures'){
+   $('resultsSection').style.display='none';
+   $('uploadSection').style.display='block';
+   document.querySelector('.main-content').scrollIntoView({behavior:'smooth'});
+  }
   if(name==='assistants')loadActivity();
   if(name==='admin')loadGroup();
  }
+  document.addEventListener('pcap:analysis-loaded',()=>view('workspace'));
+ document.querySelectorAll('.nomios-module-nav .tab').forEach(button=>button.addEventListener('click',event=>{
+  const app=controller(), module=button.dataset.tab;
+  view('workspace');
+  if(module==='multi-pcap') {
+   event.stopImmediatePropagation();
+   app?.openMultiPcapMode();
+   return;
+  }
+  if(!app?.currentResults) {
+   event.stopImmediatePropagation();
+   document.querySelector('.history-section')?.scrollIntoView({behavior:'smooth'});
+   app?.showToast('info','Choisir une capture','Ouvrez ou importez un PCAP pour explorer ses résultats.');
+   return;
+  }
+  $('resultsSection').style.display='block';
+  $('uploadSection').style.display='none';
+ },{capture:true}));
  document.querySelectorAll('[data-nomios-view]').forEach(button=>button.addEventListener('click',()=>view(button.dataset.nomiosView)));
  document.querySelectorAll('[data-nomios-module]').forEach(button=>button.addEventListener('click',()=>{
   view('workspace');
@@ -70,6 +93,7 @@
  $('nomiosRefreshActivity').addEventListener('click',loadActivity);
  setInterval(()=>{if(activeView==='assistants'&&!document.hidden)loadActivity();},30000);
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='assistants')loadActivity();});
+ if(!controller()?.currentResults)view('captures');
  if(window.PCAP_IDENTITY_READY)window.PCAP_IDENTITY_READY.then(identity=>{
   user=identity;$('nomiosUserName').textContent=identity.name;$('nomiosUserStatus').textContent='Microsoft Entra ID';$('nomiosLogout').hidden=false;$('nomiosAdminNav').hidden=!identity.is_admin;
   const logoutButton=element('button','Se déconnecter','btn btn-secondary');logoutButton.type='button';logoutButton.addEventListener('click',logout);document.querySelector('.header-info').append(logoutButton);

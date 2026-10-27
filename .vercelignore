@@ -14,3 +14,6 @@ __pycache__
 
 **/node_modules
 cloud_upload/public
+
+.agents
+skills-lock.json

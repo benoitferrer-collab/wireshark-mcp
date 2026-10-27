@@ -29,10 +29,8 @@ class VirtualScroll {
         // Recalculer le nombre de lignes visibles quand la fenêtre change de taille
         this.resizeHandler = () => {
             const count = Math.ceil(this.container.offsetHeight / this.rowHeight) + 5;
-            if (count !== this.visibleCount) {
-                this.visibleCount = count;
-                this.render();
-            }
+            this.visibleCount = count;
+            this.render();
         };
         window.addEventListener('resize', this.resizeHandler, { passive: true });
     }
@@ -63,15 +61,22 @@ class VirtualScroll {
         const startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - 2);
         const endIndex = Math.min(total, startIndex + this.visibleCount + 4);
 
-        this.spacer.style.height = `${total * this.rowHeight}px`;
+        const table = this.tbody.closest('table');
+        const headerHeight = table?.querySelector('thead')?.getBoundingClientRect().height || 0;
+        const columnWidths = Array.from(table?.querySelectorAll('thead th') || []).map(th => th.getBoundingClientRect().width);
+        this.spacer.style.height = `${total * this.rowHeight + headerHeight}px`;
 
         // Construire hors DOM puis remplacer en une opération
         const fragment = document.createDocumentFragment();
         for (let i = startIndex; i < endIndex; i++) {
             const row = this.renderFn(this.filteredData[i], i);
             row.style.position = 'absolute';
-            row.style.top = `${i * this.rowHeight}px`;
+            row.style.top = `${i * this.rowHeight + headerHeight}px`;
             row.style.width = '100%';
+            if (columnWidths.length) {
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = columnWidths.map(width => `${width}px`).join(' ');
+            }
             fragment.appendChild(row);
         }
         this.tbody.replaceChildren(fragment);
@@ -93,7 +98,7 @@ class PCAPAnalyzer {
         this.chatbotOpen = false;
         this.guidedProblems = [];
         this.guidedQuestions = [];
-        this.autoQuestionnaireEnabled = true;
+        this.autoQuestionnaireEnabled = false;
         this.autoQuestionnaireInProgress = false;
         this.autoQuestionnaireDoneForTask = '';
         this.autoQuestionnaireTimer = null;
@@ -1446,6 +1451,9 @@ Réponds STRICTEMENT en JSON:
             guidedAskTopBtn.addEventListener('click', () => this.askTopGuidedQuestion());
         }
 
+        const guidedRunBtn = document.getElementById('guidedRunBtn');
+        if (guidedRunBtn) guidedRunBtn.addEventListener('click', () => this.runAutoQuestionnaire(true));
+
         // Streams filters
         const streamIpFilter = document.getElementById('streamIpFilter');
         const streamTypeFilter = document.getElementById('streamTypeFilter');
@@ -1675,18 +1683,19 @@ Réponds STRICTEMENT en JSON:
             tab.setAttribute('tabindex', tab.classList.contains('active') ? '0' : '-1');
             tab.addEventListener('keydown', (e) => {
                 const key = e.key;
-                if (!['ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter', ' '].includes(key)) return;
+                if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' '].includes(key)) return;
                 e.preventDefault();
                 if (key === 'Enter' || key === ' ') {
-                    const tabId = e.currentTarget?.dataset?.tab;
-                    if (tabId) this.switchTab(tabId);
+                    e.currentTarget.click();
                     return;
                 }
                 let nextIdx = idx;
-                if (key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
-                if (key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+                if (key === 'ArrowRight' || key === 'ArrowDown') nextIdx = (idx + 1) % tabs.length;
+                if (key === 'ArrowLeft' || key === 'ArrowUp') nextIdx = (idx - 1 + tabs.length) % tabs.length;
                 if (key === 'Home') nextIdx = 0;
                 if (key === 'End') nextIdx = tabs.length - 1;
+                const group = tabs[nextIdx]?.closest('.nomios-nav-group');
+                if (group) group.open = true;
                 tabs[nextIdx]?.focus();
             });
             tab.addEventListener('click', (e) => {
@@ -1866,13 +1875,15 @@ Réponds STRICTEMENT en JSON:
 
         console.log('🔄 Changement d\'onglet vers:', normalizedTabId);
         this.currentTabId = normalizedTabId;
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch || Boolean(document.querySelector('.nomios-module-nav'));
         const resultsSection = document.getElementById('resultsSection');
 
         // Update tab buttons
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         const targetTab = document.querySelector(`.tab[data-tab="${normalizedTabId}"]`);
         if (targetTab) {
+            const group = targetTab.closest('.nomios-nav-group');
+            if (group) group.open = true;
             targetTab.classList.add('active');
             const reduceMotionTab = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch;
             try {
@@ -1921,6 +1932,7 @@ Réponds STRICTEMENT en JSON:
             this.bindInteractiveSpotlights(targetContent || document);
             this.applyFocusInvestigation();
             this.requestChartsResize(2);
+            if (targetContent && document.querySelector('.nomios-module-nav')) targetContent.scrollIntoView({block:'start',behavior:'auto'});
         };
 
         if (!reduceMotion && currentContent && targetContent && currentContent !== targetContent) {
@@ -2296,6 +2308,7 @@ Réponds STRICTEMENT en JSON:
             console.error('Problem spotlight render error:', spotlightError);
         }
         this.updateAnalysisMeta(results);
+        document.dispatchEvent(new CustomEvent('pcap:analysis-loaded'));
         this.updateNetworkVisualStateFromResults(results);
         this.refreshMenuHealthFromResults(results);
         this.applyPremiumEntrance();
@@ -5814,6 +5827,7 @@ Réponds STRICTEMENT en JSON:
 
                 const onMove = (e) => {
                     th.style.width = Math.max(60, startWidth + e.clientX - startX) + 'px';
+                    this.virtualScroll?.render();
                 };
                 const onUp = () => {
                     resizer.classList.remove('resizing');
@@ -7232,6 +7246,7 @@ Réponds STRICTEMENT en JSON:
 
             this.displayResults(results);
             this.triggerTabDataLoad(this.currentTabId);
+            document.getElementById('resultsSection').scrollIntoView({block:'start',behavior:'auto'});
 
             // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);

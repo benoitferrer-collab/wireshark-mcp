@@ -17,3 +17,32 @@ test('compact stream rows preserve endpoints, traffic, diagnostics and both acti
  analyzer.renderStreamsTableRows([]);
  assert.ok(tbody.innerHTML.includes('colspan="9"'));
 });
+
+test('opening a capture does not schedule unsolicited AI popups',()=>{
+ let scheduled=0;
+ const context={setTimeout:()=>{scheduled++;return 1;},clearTimeout(){}};
+ const source=fs.readFileSync('static/js/app.js','utf8').split('// Initialize')[0];
+ vm.runInNewContext(source+'\nglobalThis.Analyzer=PCAPAnalyzer;',context);
+ context.Analyzer.prototype.init=function(){};
+ const analyzer=new context.Analyzer();
+ analyzer.currentTaskId='capture';
+ analyzer.scheduleAutoQuestionnaire();
+ assert.equal(scheduled,0);
+});
+
+test('virtual packet rows start below headers and align with resized columns',()=>{
+ const rendered=[];
+ const head={getBoundingClientRect:()=>({height:32})};
+ const table={querySelector:()=>head,querySelectorAll:()=>[{getBoundingClientRect:()=>({width:60})},{getBoundingClientRect:()=>({width:130})}]};
+ const tbody={closest:()=>table,replaceChildren:fragment=>rendered.push(...fragment.rows)};
+ const spacer={style:{}};
+ const container={offsetHeight:100,scrollTop:0,addEventListener(){}};
+ const context={window:{addEventListener(){}},document:{createDocumentFragment:()=>({rows:[],appendChild(row){this.rows.push(row);}})}};
+ const source=fs.readFileSync('static/js/app.js','utf8').split('// Initialize')[0];
+ vm.runInNewContext(source+'\nglobalThis.Virtual=VirtualScroll;',context);
+ const virtual=new context.Virtual(container,spacer,tbody,38);
+ virtual.setData([1,2],()=>({style:{}}));
+ assert.equal(rendered[0].style.top,'32px');
+ assert.equal(spacer.style.height,'108px');
+ assert.equal(rendered[0].style.gridTemplateColumns,'60px 130px');
+});

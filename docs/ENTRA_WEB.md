@@ -7,6 +7,20 @@ Authentification nouvelle activée uniquement par `WEB_AUTH_ENABLED=true`. Sans 
 paramètre, l'accès par clé API existant continue de fonctionner ; le panneau
 Assistants explique que le suivi n'est pas encore activé.
 
+## Stockage partagé provisionné le 27 octobre 2026
+
+La ressource Neon `nomios-identity` (plan gratuit `free_v3`) est reliée au projet
+Vercel `wireshark-mcp`, environnement Production. `DATABASE_URL` est injectée par
+l’intégration. Les tables `web_sessions`, `identity_policy`, `identity_audit` et
+`mcp_activity` sont initialisées. Une écriture/lecture/suppression de session
+chiffrée a été vérifiée sur cette base, sans importer de PCAP.
+
+`WEB_SESSION_ENCRYPTION_KEY` et `CRON_SECRET` sont configurés comme secrets Vercel.
+La politique initiale est réservée à l’administrateur, sans groupe autorisé.
+La connexion web n’est pas activée tant que le client Entra Web, son secret et
+les autres variables ne sont pas configurés et testés. Les secrets ne sont pas
+versionnés dans le dépôt.
+
 ## Inscription Entra dédiée au site
 
 Créer **Nomios PcapAnalyzer Web**, comptes de ce tenant uniquement :

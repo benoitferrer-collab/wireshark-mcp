@@ -236,3 +236,72 @@ button:focus-visible,a:focus-visible,summary:focus-visible { outline:2px solid v
 @media(max-width:820px) { .nomios-sidebar nav button,.nomios-analysis-layout .tab { font-size:11px; } }
 .nomios-analysis-layout .tab::before,.nomios-analysis-layout .tab::after { display:none; }
 .cause-badge { border-radius:5px; line-height:1.5; }
+/* Unified navigation: one permanent rail, no analysis menu inside the page. */
+.nomios-home-nav { margin-top:2px; }
+.nomios-module-nav.tabs { display:block; overflow:visible; white-space:normal; background:none; border:0; box-shadow:none; padding:0; margin:0; }
+.nomios-module-nav .tab { display:flex; align-items:center; gap:11px; width:100%; min-height:40px; margin:3px 0; padding:10px 13px; color:#aebed5; font:inherit; font-size:12px; font-weight:450; background:none; border:0; border-radius:7px; box-shadow:none; text-align:left; white-space:normal; }
+.nomios-module-nav .tab svg { width:17px; height:17px; flex:none; opacity:.8; }
+.nomios-module-nav .tab::before,.nomios-module-nav .tab::after { display:none!important; }
+.nomios-module-nav .tab:hover { color:#fff; background:#ffffff09; }
+.nomios-module-nav .tab.active { background:#2a6be9; color:#fff; box-shadow:none; }
+.nomios-module-nav .tab.active svg { opacity:1; }
+.nomios-nav-group { border-top:1px solid #ffffff0c; margin-top:13px; padding-top:6px; }
+.nomios-nav-group>summary { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 13px; cursor:pointer; color:#bdcce2; font-size:11px; font-weight:550; list-style:none; }
+.nomios-nav-group>summary::-webkit-details-marker { display:none; }
+.nomios-nav-group>summary::after { content:'⌄'; color:#7891b4; font-size:14px; }
+.nomios-nav-group[open]>summary::after { content:'⌃'; }
+.nomios-nav-group>div { padding:0 0 4px 6px; }
+.nomios-nav-group .tab { padding-left:10px; font-size:11px; min-height:37px; }
+.nomios-analysis-layout { margin-top:10px; }
+.nomios-analysis-layout .menu-health-center { background:none; border:0; border-bottom:1px solid var(--border-color); border-radius:0; margin-bottom:22px; }
+.menu-health-header { padding:10px 0; }
+.menu-health-items { padding:0 0 12px; }
+/* Surfaces mark real sections, rather than nesting cards around controls. */
+.tab-content>.card.table-card { border:0; background:none; padding:0; box-shadow:none; }
+.packet-filter-bar { border:0; border-radius:0; background:none; padding:0 0 16px; box-shadow:none; }
+.packet-filter-bar .filter-input-wrapper { border:0; background:none; padding:0; }
+.packet-filter-bar input[type=text] { border:1px solid var(--border-color); background:var(--bg-secondary); border-radius:7px; padding:10px 12px; }
+#tab-packets .packet-filter-bar { gap:10px; }
+#tab-packets .packet-filter-bar .filter-input-wrapper { display:flex; align-items:center; gap:9px; flex:1; min-width:220px; }
+#tab-packets .packet-filter-bar .filter-input-wrapper input { width:100%; }
+#tab-packets .table-wrapper { border:1px solid var(--border-color); background:var(--bg-secondary); }
+.card.chart-card { box-shadow:none; border-color:var(--border-light); }
+@media(max-width:820px) {
+ .nomios-sidebar { padding-bottom:12px; }
+ .nomios-sidebar .nomios-home-nav,.nomios-sidebar .nomios-sidebar-bottom { display:flex!important; }
+ .nomios-module-nav.tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; margin:9px 0; }
+ .nomios-module-nav>.nav-label { display:none; }
+ .nomios-module-nav>.tab { width:100%; min-height:35px; padding:8px; font-size:10px; gap:5px; }
+ .nomios-module-nav>.nomios-nav-group { margin-top:2px; padding:0; border-top:1px solid #ffffff12; }
+ .nomios-nav-group>summary { padding:8px; font-size:10px; }
+ .nomios-nav-group>div { padding:0; }
+ .nomios-nav-group .tab { padding:8px; font-size:10px; gap:6px; }
+ .nomios-nav-group .tab svg { width:13px; height:13px; }
+ .nomios-sidebar-bottom { padding-top:0; }
+ .nomios-home-nav button { min-height:32px!important; }
+}
+@media(max-width:480px) {
+ .nomios-module-nav.tabs { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .nomios-module-nav>.tab { font-size:11px; }
+ .nomios-module-nav>.nomios-nav-group { grid-column:1 / -1; }
+ .nomios-nav-group>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; }
+ .nomios-nav-group:not([open])>div { display:none; }
+ .nomios-sidebar .nomios-brand { margin-bottom:10px; }
+}
+.nomios-sidebar.is-library .nomios-module-nav .tab.active { background:none; color:#aebed5; }
+.premium-hero { border:0; border-radius:0; background:none; padding:0 0 21px; box-shadow:none; }
+.premium-hero h2 { font-size:28px; letter-spacing:-.9px; }
+.summary-cards { gap:0; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:10px; overflow:hidden; }
+.summary-cards>.summary-card { border:0; border-radius:0; box-shadow:none; background:none; padding:16px 18px; border-right:1px solid var(--border-light); border-bottom:1px solid var(--border-light); min-height:80px; }
+.summary-cards>.summary-card:nth-child(4n) { border-right:0; }
+.summary-cards>.summary-card:nth-child(n+5) { border-bottom:0; }
+.summary-cards .card-value { font-size:23px; }
+.investigation-hub-card { border:0; border-bottom:1px solid var(--border-color); border-radius:0; background:none; box-shadow:none; }
+.investigation-fold-heading { padding:12px 0; }
+@media(max-width:820px) { .summary-cards>.summary-card:nth-child(2n) { border-right:0; } .summary-cards>.summary-card:nth-child(n+5) { border-bottom:1px solid var(--border-light); } .summary-cards>.summary-card:nth-child(n+7) { border-bottom:0; } }
+#packetTable { display:block; height:100%; min-width:1050px; width:100%; }
+#packetTable thead { display:table; table-layout:fixed; width:100%; position:sticky; top:0; z-index:3; background:var(--bg-tertiary); }
+#packetTable thead th { padding:10px; font-size:10px; border-bottom:1px solid var(--border-color); box-sizing:border-box; }
+#packetTable .packet-row td { display:block; padding:8px 10px; font-size:11px!important; box-sizing:border-box; line-height:21px; }
+#packetTable .packet-row { border-bottom:1px solid var(--border-light); background:var(--bg-secondary); }
+#packetTable .packet-row:nth-child(even) { background:var(--bg-tertiary); }
