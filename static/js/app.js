@@ -2148,6 +2148,9 @@ Réponds STRICTEMENT en JSON:
             this.displayResults(results);
             this.loadHistory();
 
+            // A restored tab may already be selected before the capture is loaded.
+            this.triggerTabDataLoad(this.currentTabId);
+
             // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);
 
@@ -3051,29 +3054,21 @@ Réponds STRICTEMENT en JSON:
         if (!tbody) return;
 
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Aucun stream trouvé avec ces filtres.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Aucun stream trouvé avec ces filtres.</td></tr>';
             return;
         }
 
         tbody.innerHTML = rows.map(stream => `
             <tr>
-                <td>${stream.stream_id}</td>
-                <td><code>${this.escapeHtml(stream.src_endpoint)}</code></td>
-                <td><code>${this.escapeHtml(stream.dst_endpoint)}</code></td>
-                <td>${stream.packet_count.toLocaleString('fr-FR')}</td>
-                <td>${this.formatBytesShort(stream.total_bytes)}</td>
-                <td><span class="protocol-badge ${this.sanitizeClassToken(stream.type)}">${this.escapeHtml(stream.type)}</span></td>
-                <td><span class="state-badge ${this.sanitizeClassToken(stream.state || '')}">${this.escapeHtml(stream.state || '-')}</span></td>
-                <td>${stream.retransmissions.toLocaleString('fr-FR')}</td>
-                <td>${stream.rst_count.toLocaleString('fr-FR')}</td>
+                <td class="stream-id">#${stream.stream_id}</td>
+                <td class="stream-endpoints"><div><span class="endpoint-label">SRC</span><code>${this.escapeHtml(stream.src_endpoint)}</code></div><div><span class="endpoint-label">DST</span><code>${this.escapeHtml(stream.dst_endpoint)}</code></div></td>
+                <td class="stream-traffic"><strong>${stream.packet_count.toLocaleString('fr-FR')} <small>paquets</small></strong><span>${this.formatBytesShort(stream.total_bytes)}</span></td>
+                <td class="stream-connection"><span class="protocol-badge ${this.sanitizeClassToken(stream.type)}">${this.escapeHtml(stream.type)}</span><span class="state-badge ${this.sanitizeClassToken(stream.state || '')}">${this.escapeHtml(stream.state || '-')}</span></td>
+                <td class="stream-number">${stream.retransmissions.toLocaleString('fr-FR')}</td>
+                <td class="stream-number">${stream.rst_count.toLocaleString('fr-FR')}</td>
                 <td><span class="risk-badge ${this.sanitizeClassToken(stream.risk_level)}">${this.escapeHtml(stream.risk_level)}</span></td>
-                <td title="${this.escapeHtml(stream.cause_details || stream.probable_cause || '-')}">
-                    <span class="${this.getCauseBadgeClass(stream.probable_cause_code)}">${this.escapeHtml(this.truncate(stream.probable_cause || '-', 52))}</span>
-                </td>
-                <td>
-                    <button class="action-btn view" onclick='analyzer.showStreamDetails(${stream.stream_id}, ${JSON.stringify(stream.stream_identifier || "")})'>📦 Détails</button>
-                    <button class="action-btn view" onclick='analyzer.showIpSessionModal(${JSON.stringify(stream.src_ip)}, ${stream.stream_id})'>👁️ IP</button>
-                </td>
+                <td class="stream-cause" title="${this.escapeHtml(stream.cause_details || stream.probable_cause || '-')}"><span class="${this.getCauseBadgeClass(stream.probable_cause_code)}">${this.escapeHtml(stream.probable_cause || '-')}</span></td>
+                <td class="stream-actions"><div><button class="action-btn view" onclick='analyzer.showStreamDetails(${stream.stream_id}, ${this.escapeHtml(JSON.stringify(stream.stream_identifier || ""))})' aria-label="Détails du flux ${stream.stream_id}">Ouvrir <span aria-hidden="true">↗</span></button><button class="action-btn view stream-ip-action" onclick='analyzer.showIpSessionModal(${this.escapeHtml(JSON.stringify(stream.src_ip))}, ${stream.stream_id})' aria-label="Sessions IP du flux ${stream.stream_id}">IP</button></div></td>
             </tr>
         `).join('');
     }
@@ -3120,7 +3115,7 @@ Réponds STRICTEMENT en JSON:
             this.setMenuHealthStatus('streams', this.streamTotal > 0 ? 'ok' : 'missing', msg);
             return;
         }
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Chargement des streams...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Chargement des streams...</td></tr>';
 
         try {
             const params = new URLSearchParams();
@@ -3157,7 +3152,7 @@ Réponds STRICTEMENT en JSON:
 
             const fallback = this.buildFallbackStreamsFromResults();
             if (!fallback.length) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--danger);padding:1rem;">Erreur de chargement des streams: ${this.escapeHtml(error.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:1rem;">Erreur de chargement des streams: ${this.escapeHtml(error.message)}</td></tr>`;
                 this.updateStreamsMetrics([], 0);
                 this.updateStreamsPaginationControls(0, 0, this.streamLimit);
                 this.streamsLoadedKey = '';
@@ -7236,6 +7231,7 @@ Réponds STRICTEMENT en JSON:
             document.getElementById('resultsSection').style.display = 'block';
 
             this.displayResults(results);
+            this.triggerTabDataLoad(this.currentTabId);
 
             // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);

@@ -3,6 +3,7 @@
  'use strict';
  const $=id=>document.getElementById(id);
  let activeView='workspace', user=null, loading=false;
+ const controller=()=>typeof analyzer==='undefined'?null:analyzer;
  const names={'34a342ef-6924-42f4-b3b5-c8e53da5bbd2':'Claude'};
  const date=value=>value?new Date(value*1000).toLocaleString('fr-FR',{timeZone:'UTC'})+' UTC':'Aucun appel enregistré';
  function element(tag,text,className){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;}
@@ -21,9 +22,9 @@
   view('workspace');
   const module=button.dataset.nomiosModule;
   const results=$('resultsSection');
-  if(module==='multi-pcap'&&window.analyzer){results.style.display='block';window.analyzer.switchTab(module);}
-  else if(results.style.display!=='none'&&window.analyzer)window.analyzer.switchTab(module);
-  else {$('uploadSection').scrollIntoView({behavior:'smooth'});window.analyzer?.showToast?.('Ouvrez une analyse dans l’historique pour explorer ce module.','info');}
+  if(module==='multi-pcap'&&controller()){results.style.display='block';controller().switchTab(module);}
+  else if(results.style.display!=='none'&&controller())controller().switchTab(module);
+  else {$('uploadSection').scrollIntoView({behavior:'smooth'});controller()?.showToast?.('info','Ouvrir une analyse','Sélectionnez une capture dans l’historique pour explorer ce module.');}
  }));
  function addCard(id, stats){
   const label=names[id]||'Client MCP';
