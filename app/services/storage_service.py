@@ -394,4 +394,8 @@ class StorageService:
 
 
 # Instance singleton
-storage_service = StorageService()
+if os.getenv('PCAP_STORAGE') == 'vercel':
+    from app.cloud.storage import create_cloud_storage
+    storage_service = create_cloud_storage(StorageService)
+else:
+    storage_service = StorageService()

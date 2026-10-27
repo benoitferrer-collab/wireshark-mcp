@@ -2,9 +2,11 @@
 
 ## Déploiement Vercel et connexion Claude / ChatGPT
 
-L'interface peut être publiée sur Vercel et les analyses interrogées depuis
-Claude ou ChatGPT via le service MCP authentifié. Le moteur d'analyse reste
-hébergé dans Docker avec stockage persistant. Voir le [guide de déploiement](docs/MCP_DEPLOYMENT.md).
+L'interface, l'API, le moteur d'analyse et le service MCP sont déployables sur
+Vercel, avec Blob privé et Queues. Aucun serveur personnel n'est nécessaire.
+Les captures sont limitées à 100 Mio par fichier. Voir le
+[guide Vercel géré](docs/VERCEL_MANAGED.md), notamment la configuration OAuth
+nécessaire pour interroger les analyses depuis Claude et ChatGPT.
 
 > Application web professionnelle d'analyse PCAP pour SOC et ingénierie réseau
 

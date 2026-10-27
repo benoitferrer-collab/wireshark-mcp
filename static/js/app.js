@@ -3549,9 +3549,24 @@ Réponds STRICTEMENT en JSON:
                 body: formData,
             });
 
-            const data = await response.json();
+            let data = await response.json();
             if (!response.ok) {
                 throw new Error(data?.detail || `HTTP ${response.status}`);
+            }
+            if (data.status && data.status !== 'completed' && !data.analysis) {
+                this.updateMultiPcapStatus('Analyse en arrière-plan sur Vercel...');
+                const queuedTaskId = data.task_id;
+                for (;;) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    const statusResponse = await fetch(`/api/status/${queuedTaskId}`);
+                    const status = await statusResponse.json();
+                    if (!statusResponse.ok || status.status === 'failed') throw new Error(status.message || status.detail || 'Analyse échouée');
+                    if (status.status === 'completed') break;
+                    this.updateMultiPcapStatus(status.message || 'Analyse en cours...');
+                }
+                const resultResponse = await fetch(`/api/multi-pcap/${queuedTaskId}`);
+                data = await resultResponse.json();
+                if (!resultResponse.ok) throw new Error(data.detail || 'Résultats indisponibles');
             }
 
             this.multiPcapTaskId = data.task_id;

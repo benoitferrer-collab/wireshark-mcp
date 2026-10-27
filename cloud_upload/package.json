@@ -1,0 +1,1 @@
+{"name":"pcap-cloud-upload","private":true,"type":"module","scripts":{"build":"esbuild browser.js --bundle --format=esm --platform=browser --outfile=public/upload.js","test":"node --test *.test.js"},"dependencies":{"@vercel/blob":"^2.3.0","express":"^5.1.0"},"devDependencies":{"esbuild":"^0.25.0"}}

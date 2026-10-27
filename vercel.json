@@ -1,9 +1,25 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "buildCommand": "python3 scripts/build_frontend.py",
-  "outputDirectory": "dist",
-  "headers": [
-    { "source": "/static/js/runtime-config.js", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
-  ]
+  "services": {
+    "app": { "root": ".", "runtime": "container", "entrypoint": "Dockerfile.vercel" },
+    "uploads": { "root": "cloud_upload", "runtime": "container", "entrypoint": "Dockerfile.vercel" },
+    "mcp": {
+      "root": "mcp_gateway", "runtime": "container", "entrypoint": "Dockerfile.vercel",
+      "bindings": [{ "type": "service", "service": "app", "format": "url", "env": "MCP_BACKEND_URL" }]
+    }
+  },
+  "rewrites": [
+    { "source": "/mcp", "destination": { "service": "mcp" } },
+    { "source": "/mcp/(.*)", "destination": { "service": "mcp" } },
+    { "source": "/.well-known/oauth-protected-resource/:path*", "destination": { "service": "mcp" } },
+    { "source": "/api/cloud/upload-token", "destination": { "service": "uploads" } },
+    { "source": "/cloud-assets/:path*", "destination": { "service": "uploads" } },
+    { "source": "/(.*)", "destination": { "service": "app" } }
+  ],
+  "daemons": {
+    "analysis": {
+      "root": ".", "entrypoint": "Dockerfile.worker", "instances": { "iad1": 1 },
+      "resources": { "requests": { "memory": "2Gi" } }, "terminationGracePeriodSeconds": 300
+    }
+  }
 }

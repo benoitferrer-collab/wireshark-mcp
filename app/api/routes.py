@@ -303,7 +303,9 @@ def _parse_multi_thresholds(thresholds_json: Optional[str]) -> Optional[Dict[str
 
 
 def _load_multi_results(task_id: str) -> Dict[str, Any]:
-    json_path = storage_service.get_results_path(task_id) / "multi_results.json"
+    json_path = storage_service.get_file_path(task_id, "multi_results.json")
+    if json_path is None:
+        raise HTTPException(status_code=404, detail="Résultats multi-PCAP non trouvés")
     if not json_path.exists():
         raise HTTPException(status_code=404, detail="Résultats multi-PCAP non trouvés")
     try:
@@ -2382,7 +2384,7 @@ async def get_tcp_stream(task_id: str, stream_id: str):
     if not results:
         raise HTTPException(status_code=404, detail="Résultats non trouvés")
     
-    pcap_path = results.get("metadata", {}).get("pcap_path")
+    pcap_path = storage_service.get_pcap_path(task_id)
     if not pcap_path or not Path(pcap_path).exists():
         raise HTTPException(status_code=404, detail="Fichier PCAP non trouvé")
     
@@ -2408,7 +2410,7 @@ async def get_http_session(task_id: str, session_id: str):
     if not results:
         raise HTTPException(status_code=404, detail="Résultats non trouvés")
     
-    pcap_path = results.get("metadata", {}).get("pcap_path")
+    pcap_path = storage_service.get_pcap_path(task_id)
     if not pcap_path or not Path(pcap_path).exists():
         raise HTTPException(status_code=404, detail="Fichier PCAP non trouvé")
     
@@ -2435,7 +2437,7 @@ async def export_stream(task_id: str, stream_id: int, format: str):
     if not results:
         raise HTTPException(status_code=404, detail="Résultats non trouvés")
     
-    pcap_path = results.get("metadata", {}).get("pcap_path")
+    pcap_path = storage_service.get_pcap_path(task_id)
     if not pcap_path or not Path(pcap_path).exists():
         raise HTTPException(status_code=404, detail="Fichier PCAP non trouvé")
 

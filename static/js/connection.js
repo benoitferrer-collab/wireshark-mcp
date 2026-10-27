@@ -64,14 +64,21 @@
         if (!url.pathname.startsWith('/api/') || ![window.location.origin, apiOrigin].includes(url.origin)) {
             return nativeFetch(input, init);
         }
-        const needsLogin = Boolean(configured) && url.pathname !== '/api/health';
+        const needsLogin = Boolean(configured || window.PCAP_CONFIG?.requiresAccessKey) && url.pathname !== '/api/health';
         if (needsLogin && !token) await connect();
         const target = new URL(url.pathname + url.search, apiOrigin);
         const headers = new Headers(init.headers || (isRequest ? input.headers : undefined));
         if (token) headers.set('Authorization', `Bearer ${token}`);
         const options = { ...init, headers, credentials: 'omit' };
         const request = isRequest ? new Request(target, new Request(input, options)) : target;
-        const response = await nativeFetch(request, isRequest ? undefined : options);
+        let response;
+        if (window.PCAP_CONFIG?.cloudMode && init.body instanceof FormData &&
+            ['/api/upload', '/api/multi-pcap/analyze'].includes(url.pathname)) {
+            const { uploadForm } = await import('/cloud-assets/upload.js');
+            response = await uploadForm(init.body, url.pathname, `Bearer ${token}`);
+        } else {
+            response = await nativeFetch(request, isRequest ? undefined : options);
+        }
         if (response.status === 401) {
             token = '';
             sessionStorage.removeItem(storageKey);

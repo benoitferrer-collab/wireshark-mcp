@@ -11,3 +11,6 @@ excalidraw.log
 __pycache__
 .pytest_cache
 .superpowers
+
+**/node_modules
+cloud_upload/public

@@ -23,3 +23,8 @@ excalidraw.log
 *.pcap
 *.pcapng
 *.cap
+
+node_modules/
+cloud_upload/public/
+.vercel
+.env*

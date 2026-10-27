@@ -32,7 +32,7 @@ class GatewaySettings(BaseModel):
     @classmethod
     def from_env(cls):
         return cls(
-            public_url=os.environ['MCP_PUBLIC_URL'],
+            public_url=os.getenv('MCP_PUBLIC_URL') or ('https://' + os.environ['VERCEL_PROJECT_PRODUCTION_URL'] + '/mcp'),
             backend_url=os.getenv('MCP_BACKEND_URL', 'http://fastapi:8000'),
             backend_token=os.environ['API_ACCESS_TOKEN'],
             issuer=os.environ['MCP_OAUTH_ISSUER'],

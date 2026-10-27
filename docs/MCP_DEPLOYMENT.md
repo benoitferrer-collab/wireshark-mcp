@@ -1,5 +1,11 @@
 # Utiliser PCAP Analyzer depuis Claude et ChatGPT
 
+> **Ancienne architecture hybride, conservée comme référence.** Le déploiement
+> actuel utilise Vercel pour tous les composants : suivre
+> [VERCEL_MANAGED.md](VERCEL_MANAGED.md). Les instructions de build Vercel
+> ci-dessous décrivent l'ancienne configuration statique et ne correspondent
+> plus au `vercel.json` actuel.
+
 ## Ce qui est fourni
 
 L'interface existante peut être publiée sur Vercel. Le moteur Scapy/FastAPI,

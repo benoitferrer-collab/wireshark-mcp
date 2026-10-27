@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     @model_validator(mode='after')
     def setup_directories(self) -> 'Settings':
         """Crée les répertoires s'ils n'existent pas après validation"""
+        if os.getenv('PCAP_STORAGE') == 'vercel':
+            self.upload_dir = Path('/tmp/pcap-cloud-worker/uploads')
+            self.results_dir = Path('/tmp/pcap-cloud-worker/results')
+            self.max_file_size = 100 * 1024 * 1024
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+            self.results_dir.mkdir(parents=True, exist_ok=True)
+            return self
+
         in_docker = Path("/.dockerenv").exists() or os.getenv("DOCKER_ENV") == "1"
 
         # En local, éviter les chemins /app/* qui ne sont pas accessibles.

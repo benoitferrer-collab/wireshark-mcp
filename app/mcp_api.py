@@ -24,6 +24,8 @@ def create_mcp_router(storage):
                 limit: int = Query(20, ge=1, le=100)):
         if kind == 'single':
             entries = storage.get_analysis_history(limit=offset + limit + 1)
+        elif getattr(storage, 'managed', False) is True:
+            entries = storage.get_multi_history()
         else:
             entries = []
             for directory in storage.results_dir.iterdir():

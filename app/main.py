@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 try:
     from fastapi.responses import ORJSONResponse
@@ -61,6 +61,13 @@ app = FastAPI(
 )
 
 # Compression gzip des réponses (les JSON d'analyse font plusieurs Mo)
+CLOUD_MODE = os.getenv('PCAP_STORAGE') == 'vercel'
+if CLOUD_MODE:
+    if len(os.getenv('API_ACCESS_TOKEN', '')) < 32:
+        raise RuntimeError('Set API_ACCESS_TOKEN (at least 32 characters) before deploying')
+    from app.cloud.context import ScratchMiddleware
+    app.add_middleware(ScratchMiddleware)
+
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(APIAccessMiddleware, token=os.getenv('API_ACCESS_TOKEN', ''))
 
@@ -86,6 +93,14 @@ class CachedStaticFiles(StaticFiles):
         return response
 
 
+@app.get('/static/js/runtime-config.js', include_in_schema=False)
+async def runtime_config():
+    import json
+    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE}
+    return Response('window.PCAP_CONFIG = ' + json.dumps(config) + ';',
+                    media_type='application/javascript', headers={'Cache-Control': 'no-store'})
+
+
 static_path = Path(__file__).parent.parent / "static"
 app.mount("/static", CachedStaticFiles(directory=str(static_path)), name="static")
 
@@ -100,6 +115,9 @@ from app.api.additional_routes import additional_router
 from app.api.team_routes import team_router
 
 # Inclusion des routes API
+if CLOUD_MODE:
+    from app.cloud.routes import create_cloud_router
+    app.include_router(create_cloud_router(storage_service))
 app.include_router(api_router)
 app.include_router(additional_router)
 app.include_router(team_router)
@@ -122,8 +140,9 @@ async def root(request: Request):
         "style_css": _asset_version("css", "style.css"),
     }
     return templates.TemplateResponse(
-        "index.html",
-        {
+        request=request,
+        name="index.html",
+        context={
             "request": request,
             "app_name": settings.app_name,
             "version": settings.app_version,
