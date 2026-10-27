@@ -305,3 +305,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible { outline:2px solid v
 #packetTable .packet-row td { display:block; padding:8px 10px; font-size:11px!important; box-sizing:border-box; line-height:21px; }
 #packetTable .packet-row { border-bottom:1px solid var(--border-light); background:var(--bg-secondary); }
 #packetTable .packet-row:nth-child(even) { background:var(--bg-tertiary); }
+#tab-packets .packet-filter-bar button,#tab-packets .packet-filter-bar select,#tab-packets .filter-toggle { background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:6px; color:var(--text-secondary); padding:8px 10px; font:inherit; font-size:11px; line-height:18px; }
+#tab-packets .packet-filter-bar button { cursor:pointer; }
+#tab-packets .packet-filter-bar button:hover { color:var(--primary); border-color:var(--primary); }
+.nomios-nav-group:has(.tab.active)>summary { color:#fff; }
