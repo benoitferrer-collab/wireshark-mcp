@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+deploy/.env
+**/.env
+**/.env.*
+uploads
+results
+dist
+.vercel
+.superpowers
+**/__pycache__
+.pytest_cache
+excalidraw.log

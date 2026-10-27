@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "python3 scripts/build_frontend.py",
+  "outputDirectory": "dist",
+  "headers": [
+    { "source": "/static/js/runtime-config.js", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+  ]
+}

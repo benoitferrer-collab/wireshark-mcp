@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+uploads
+results
+tests
+gateway_tests
+samples
+excalidraw.log
+__pycache__
+.pytest_cache
+.superpowers

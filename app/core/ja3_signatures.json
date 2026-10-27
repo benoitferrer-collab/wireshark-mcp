@@ -1,0 +1,154 @@
+{
+  "_comment": "Top JA3 fingerprints de malwares connus pour audit TLS automatique",
+  "_source": "https://github.com/salesforce/ja3 + abuse.ch listings",
+  "_updated": "2026-03-11",
+  "signatures": [
+    {
+      "ja3": "e35df3e00ca4ef31d42b34bebaa2f86e",
+      "name": "Cobalt Strike",
+      "family": "RAT/C2",
+      "severity": "CRITICAL",
+      "description": "Cobalt Strike default Beacon TLS fingerprint"
+    },
+    {
+      "ja3": "b386946a5a44d1ddcc843bc75336dfce",
+      "name": "Cobalt Strike (variant)",
+      "family": "RAT/C2",
+      "severity": "CRITICAL",
+      "description": "Cobalt Strike alternate Beacon fingerprint"
+    },
+    {
+      "ja3": "51c64c77e60f3980eea90869b68c58a8",
+      "name": "Metasploit",
+      "family": "Exploit Framework",
+      "severity": "CRITICAL",
+      "description": "Metasploit Framework Meterpreter TLS"
+    },
+    {
+      "ja3": "de350869b8c85de67a350c8d186f11e6",
+      "name": "Metasploit (variant 2)",
+      "family": "Exploit Framework",
+      "severity": "CRITICAL",
+      "description": "Metasploit Meterpreter alternate fingerprint"
+    },
+    {
+      "ja3": "6734f37431670b3ab4292b8f60f29984",
+      "name": "Trickbot",
+      "family": "Banking Trojan/Loader",
+      "severity": "CRITICAL",
+      "description": "Trickbot C2 TLS fingerprint"
+    },
+    {
+      "ja3": "a0e9f5d64349fb13191bc781f81f42e1",
+      "name": "Emotet",
+      "family": "Botnet/Loader",
+      "severity": "CRITICAL",
+      "description": "Emotet banking malware TLS fingerprint"
+    },
+    {
+      "ja3": "f65949b4b68402564e2e9e0c21cff247",
+      "name": "QakBot",
+      "family": "Banking Trojan",
+      "severity": "CRITICAL",
+      "description": "QakBot/QBot C2 communication fingerprint"
+    },
+    {
+      "ja3": "d4af7987e70e79ba53e58b081ab1def3",
+      "name": "Dridex",
+      "family": "Banking Trojan",
+      "severity": "CRITICAL",
+      "description": "Dridex banking trojan TLS fingerprint"
+    },
+    {
+      "ja3": "05af1f5ca1b87cc9cc9b25185115607d",
+      "name": "AsyncRAT",
+      "family": "RAT",
+      "severity": "HIGH",
+      "description": "AsyncRAT remote access tool TLS"
+    },
+    {
+      "ja3": "c569d9b4e1aa15b4a9781c9cbfd01e9e",
+      "name": "NjRAT",
+      "family": "RAT",
+      "severity": "HIGH",
+      "description": "NjRAT (Bladabindi) TLS fingerprint"
+    },
+    {
+      "ja3": "839bbe3ed07fed922ded5aaf714d6842",
+      "name": "Agent Tesla",
+      "family": "Infostealer",
+      "severity": "HIGH",
+      "description": "Agent Tesla keylogger/stealer TLS"
+    },
+    {
+      "ja3": "72a589da586844d7f0818ce684948eea",
+      "name": "Nmap",
+      "family": "Scanner",
+      "severity": "MEDIUM",
+      "description": "Nmap SSL scanning fingerprint"
+    },
+    {
+      "ja3": "c27fb5e25082c5fa88eee34e96a1e4d3",
+      "name": "Python Requests",
+      "family": "Scripting",
+      "severity": "LOW",
+      "description": "Python requests library default TLS (common in automation scripts)"
+    },
+    {
+      "ja3": "b32309a26951912be7dba376398d2d3f",
+      "name": "Go HTTP",
+      "family": "Scripting",
+      "severity": "LOW",
+      "description": "Golang default HTTP client (common in malware written in Go)"
+    },
+    {
+      "ja3": "8bebb2a24a8e9e9edab13b3f2f8a54dd",
+      "name": "PlugX",
+      "family": "RAT/APT",
+      "severity": "CRITICAL",
+      "description": "PlugX APT backdoor TLS fingerprint"
+    },
+    {
+      "ja3": "ae4edc6faf64d08308082ad26be60767",
+      "name": "Sliver C2",
+      "family": "C2 Framework",
+      "severity": "CRITICAL",
+      "description": "Sliver open-source C2 framework fingerprint"
+    },
+    {
+      "ja3": "9e10692f1b7f78228b2d4e424db3a98c",
+      "name": "Brute Ratel",
+      "family": "C2 Framework",
+      "severity": "CRITICAL",
+      "description": "Brute Ratel C4 adversarial simulation framework"
+    },
+    {
+      "ja3": "2d1eb5817ece335c24904f516ad5da12",
+      "name": "Havoc C2",
+      "family": "C2 Framework",
+      "severity": "CRITICAL",
+      "description": "Havoc open-source C2 framework fingerprint"
+    }
+  ],
+  "weak_ciphers": [
+    "TLS_RSA_WITH_RC4_128_MD5",
+    "TLS_RSA_WITH_RC4_128_SHA",
+    "TLS_RSA_EXPORT_WITH_RC2_CBC_40_MD5",
+    "TLS_RSA_WITH_DES_CBC_SHA",
+    "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+    "TLS_RSA_EXPORT_WITH_DES40_CBC_SHA",
+    "TLS_DHE_RSA_WITH_DES_CBC_SHA",
+    "TLS_DHE_RSA_EXPORT_WITH_DES40_CBC_SHA",
+    "SSL_CK_RC4_128_WITH_MD5",
+    "SSL_CK_DES_192_EDE3_CBC_WITH_MD5",
+    "TLS_RSA_WITH_NULL_MD5",
+    "TLS_RSA_WITH_NULL_SHA",
+    "TLS_RSA_WITH_NULL_SHA256"
+  ],
+  "deprecated_versions": [
+    "SSLv2",
+    "SSLv3",
+    "TLSv1.0",
+    "TLSv1.1"
+  ]
+}

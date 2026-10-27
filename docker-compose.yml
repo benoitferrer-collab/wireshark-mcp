@@ -1,0 +1,159 @@
+# PCAP Analyzer Pro - Docker Compose Configuration
+# Orchestration des services: FastAPI, Celery Worker, Redis
+
+services:
+  # ===========================================
+  # Service Principal: FastAPI Backend
+  # ===========================================
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pcap_analyzer_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-3221225472}
+      - ANALYSIS_TIMEOUT=${ANALYSIS_TIMEOUT:-3600}
+      - WORKERS=${WORKERS:-5}
+      - UPLOAD_DIR=/app/uploads
+      - RESULTS_DIR=/app/results
+      # Configuration Ollama (IA)
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
+    volumes:
+      - uploads_data:/app/uploads
+      - results_data:/app/results
+      - logs_data:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pcap_network
+    # Ajout pour macOS Docker Desktop
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================
+  # Celery Worker: Traitement Asynchrone
+  # ===========================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pcap_analyzer_worker
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4 -Q pcap_analysis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-3221225472}
+      - ANALYSIS_TIMEOUT=${ANALYSIS_TIMEOUT:-3600}
+      - UPLOAD_DIR=/app/uploads
+      - RESULTS_DIR=/app/results
+      # Configuration Ollama (IA)
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
+    volumes:
+      - uploads_data:/app/uploads
+      - results_data:/app/results
+      - logs_data:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pcap_network
+    # Ajout pour macOS Docker Desktop
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Limites de ressources pour éviter la surcharge
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # ===========================================
+  # Redis: Broker et Backend pour Celery
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    container_name: pcap_analyzer_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - pcap_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ===========================================
+  # Celery Flower: Monitoring (Optionnel)
+  # ===========================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pcap_analyzer_flower
+    restart: unless-stopped
+    command: celery -A app.core.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - pcap_network
+    profiles:
+      - monitoring
+
+# ===========================================
+# Volumes Persistants
+# ===========================================
+volumes:
+  uploads_data:
+    driver: local
+  results_data:
+    driver: local
+  redis_data:
+    driver: local
+  logs_data:
+    driver: local
+
+# ===========================================
+# Réseau Isolé
+# ===========================================
+networks:
+  pcap_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+

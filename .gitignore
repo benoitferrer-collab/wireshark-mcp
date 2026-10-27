@@ -1,0 +1,25 @@
+
+# Secrets locaux — ne jamais committer
+.env
+
+# Données de runtime
+results/
+uploads/
+dist/
+.vercel/
+__pycache__/
+*.pyc
+.pytest_cache/
+.superpowers/
+deploy/.env
+
+# Local tools, secrets and capture files
+.claude/
+.vscode/
+.abacus.donotdelete
+excalidraw.log
+.env.*
+!.env.example
+*.pcap
+*.pcapng
+*.cap

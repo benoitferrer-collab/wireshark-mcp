@@ -1,0 +1,2123 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark" data-ui-style="default">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_name }} - Analyse PCAP Professionnelle</title>
+    <link rel="stylesheet" href="/static/css/style.css?v={{ assets_version.style_css }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Vis.js for Timeline and Network Graph -->
+    <link href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/vis-network@9.1.6/styles/vis-network.min.css" rel="stylesheet">
+    <!-- defer: ne bloque pas le premier rendu; l'ordre d'exécution est préservé -->
+    <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script defer src="https://unpkg.com/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"></script>
+    <script defer src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+    <style>
+        /* ========== OSI LAYER MODAL ========== */
+        .osi-modal-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-glass);
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+            z-index: 1;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+
+        .osi-modal-header .pkt-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .osi-layer {
+            border-bottom: 1px solid var(--border-glass);
+            overflow: hidden;
+        }
+
+        .osi-layer:last-child {
+            border-bottom: none;
+        }
+
+        .osi-layer-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+
+        .osi-layer-header:hover {
+            background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+        }
+
+        .osi-layer-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.2rem 0.55rem;
+            border-radius: 99px;
+            color: #fff;
+            min-width: 2.2rem;
+            text-align: center;
+        }
+
+        .osi-layer-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            flex: 1;
+        }
+
+        .osi-layer-summary {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .osi-chevron {
+            transition: transform 0.2s;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .osi-layer.open .osi-chevron {
+            transform: rotate(90deg);
+        }
+
+        .osi-layer-body {
+            display: none;
+            padding: 0.5rem 1.25rem 1rem 1.25rem;
+        }
+
+        .osi-layer.open .osi-layer-body {
+            display: block;
+        }
+
+        .osi-layer.empty .osi-layer-header {
+            opacity: 0.45;
+            cursor: default;
+        }
+
+        .osi-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem 1.5rem;
+        }
+
+        .osi-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .osi-field-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .osi-field-value {
+            font-size: 0.85rem;
+            font-family: var(--font-mono);
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .hex-dump {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem;
+            word-break: break-all;
+            line-height: 1.8;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .hex-dump .hex-group {
+            margin-right: 0.3rem;
+        }
+
+        .hex-toggle {
+            background: none;
+            border: 1px solid var(--border-glass);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            padding: 0.35rem 0.75rem;
+            font-size: 0.78rem;
+            cursor: pointer;
+            margin: 0.75rem 0 0.5rem;
+            width: 100%;
+            text-align: left;
+            transition: background 0.15s;
+        }
+
+        .hex-toggle:hover {
+            background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+        }
+
+        /* ========== IP SESSION MODAL ========== */
+        .ip-modal-stats {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .ip-stat-card {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            padding: 0.65rem 1rem;
+            text-align: center;
+            flex: 1;
+            min-width: 90px;
+        }
+
+        .ip-stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+
+        .ip-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .ip-mini-charts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .ip-sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.83rem;
+        }
+
+        .ip-sessions-table th {
+            text-align: left;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .ip-sessions-table td {
+            padding: 0.45rem 0.6rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .ip-sessions-table tr:hover td {
+            background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+        }
+
+        .direction-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.6rem;
+            height: 1.6rem;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .direction-out {
+            background: rgba(var(--primary-rgb), 0.15);
+            color: var(--primary);
+        }
+
+        .direction-in {
+            background: rgba(var(--accent-rgb), 0.15);
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Particle Background -->
+    <canvas id="particleCanvas" class="particle-canvas"></canvas>
+    <div class="app-container">
+        <!-- Toast Container -->
+        <div class="toast-container" id="toastContainer"></div>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                        <path d="M2 17l10 5 10-5" />
+                        <path d="M2 12l10 5 10-5" />
+                    </svg>
+                    <h1>{{ app_name }}</h1>
+                </div>
+                <div class="header-info">
+                    <span class="version">v{{ version }}</span>
+                    <span class="status-indicator online">● API Online</span>
+
+                    <!-- Ollama Status -->
+                    <div class="ollama-status" id="ollamaStatus" title="Statut Ollama">
+                        <span class="ollama-dot" id="ollamaDot">●</span>
+                        <span class="ollama-label" id="ollamaLabel">Ollama</span>
+                    </div>
+                    <button class="ollama-config-btn" id="ollamaConfigBtn" title="Configurer Ollama">
+                        ⚙ IA
+                    </button>
+                    <div class="ollama-status" id="maclookupStatus" title="Statut MacLookup">
+                        <span class="ollama-dot" id="maclookupDot">●</span>
+                        <span class="ollama-label" id="maclookupLabel">MacLookup</span>
+                    </div>
+                    <button class="ollama-config-btn" id="maclookupConfigBtn" title="Configurer MacLookup">
+                        🏷️ MAC
+                    </button>
+
+                    <!-- Theme Toggle -->
+                    <div class="theme-toggle" id="themeToggle" title="Changer de thème">
+                        <span class="theme-toggle-icon" id="sunIcon">☀️</span>
+                        <span class="theme-toggle-icon active" id="moonIcon">🌙</span>
+                        <div class="theme-toggle-slider"></div>
+                    </div>
+                    <button class="ui-style-toggle" id="liquidToggle" type="button" title="Activer le style Superneon" aria-pressed="false">
+                        <span class="ui-style-icon">✦</span>
+                        <span class="ui-style-label">Neon</span>
+                    </button>
+                    <button class="focus-mode-toggle" id="focusModeToggle" type="button" title="Mode Focus Investigation" aria-pressed="false">
+                        <span class="focus-mode-icon">🎯</span>
+                        <span class="focus-mode-label">Focus</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Breadcrumb Navigation -->
+        <nav class="breadcrumb-nav" id="breadcrumbNav" style="display: none;">
+            <div class="breadcrumb-content">
+                <ol class="breadcrumb" id="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="#" onclick="analyzer.navigateTo('overview')">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                            </svg>
+                            Vue Globale
+                        </a>
+                    </li>
+                </ol>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section" id="uploadSection">
+                <div class="premium-intro">
+                    <p class="premium-intro-kicker">Network Forensics Suite</p>
+                    <h2 class="premium-intro-title">Détectez, priorisez, investiguez le trafic en profondeur.</h2>
+                    <p class="premium-intro-subtitle">Pipeline SOC prêt à l'emploi: upload, corrélation protocolaire, IA et exports DFIR.</p>
+                    <div class="premium-intro-badges">
+                        <span>TCP Deep Analysis</span>
+                        <span>Threat Intel</span>
+                        <span>AI Copilot</span>
+                    </div>
+                </div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                    </div>
+                    <h2>Glissez-déposez votre fichier PCAP</h2>
+                    <p>ou cliquez pour sélectionner un fichier</p>
+                    <p class="file-info">Formats acceptés: .pcap, .pcapng, .cap (Max: {{ max_file_size_gb }}GB)</p>
+                    <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap" hidden>
+                </div>
+                <div class="upload-alt-actions" style="margin-top: 0.75rem; display:flex; justify-content:center;">
+                    <button class="btn btn-secondary" id="openMultiPcapMode">🧩 Ouvrir le mode Multi-PCAP</button>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-header">
+                        <span id="progressFileName"></span>
+                        <span id="progressStatus">En attente...</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p id="progressMessage" class="progress-message"></p>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="card premium-hero">
+                    <div class="premium-hero-copy">
+                        <p class="premium-hero-kicker">Command Center</p>
+                        <h2>Analyse PCAP en direct</h2>
+                        <p id="analysisMetaLabel">Résultats consolidés et prêts pour investigation.</p>
+                    </div>
+                    <div class="premium-hero-signals">
+                        <span class="signal-pill" id="signalPackets">Paquets: -</span>
+                        <span class="signal-pill" id="signalRisk">Risque: -</span>
+                        <span class="signal-pill" id="signalDominantProto">Top protocole: -</span>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="summary-cards">
+                    <div class="card summary-card clickable" onclick="analyzer.showPacketsView()">
+                        <div class="card-icon packets">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                                <line x1="8" y1="21" x2="16" y2="21" />
+                                <line x1="12" y1="17" x2="12" y2="21" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Paquets</span>
+                            <span class="card-value" id="totalPackets">-</span>
+                        </div>
+                        <div class="card-arrow">→</div>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon bytes">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Volume</span>
+                            <span class="card-value" id="totalBytes">-</span>
+                        </div>
+                    </div>
+                    <div class="card summary-card clickable" onclick="analyzer.showTcpSessionsView()">
+                        <div class="card-icon sessions">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Sessions TCP</span>
+                            <span class="card-value" id="tcpSessions">-</span>
+                        </div>
+                        <div class="card-arrow">→</div>
+                    </div>
+                    <div class="card summary-card risk-card clickable" id="riskCard"
+                        onclick="analyzer.showAnomaliesView()">
+                        <div class="card-icon risk">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path
+                                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Risque</span>
+                            <span class="card-value" id="riskLevel">-</span>
+                            <span class="anomaly-count" id="anomalyCount"></span>
+                        </div>
+                        <button class="btn-ai-small"
+                            onclick="event.stopPropagation(); analyzer.analyzeWithAI('anomalies')"
+                            title="Analyser avec IA">
+                            🤖
+                        </button>
+                        <div class="card-arrow">→</div>
+                    </div>
+                </div>
+
+                <!-- DNS & HTTP Summary Cards -->
+                <div class="summary-cards summary-cards-secondary">
+                    <div class="card summary-card clickable" onclick="analyzer.showDnsView()">
+                        <div class="card-icon dns">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="2" y1="12" x2="22" y2="12" />
+                                <path
+                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Requêtes DNS</span>
+                            <span class="card-value" id="dnsQueries">-</span>
+                        </div>
+                        <button class="btn-ai-small" onclick="event.stopPropagation(); analyzer.analyzeWithAI('dns')"
+                            title="Analyser avec IA">
+                            🤖
+                        </button>
+                        <div class="card-arrow">→</div>
+                    </div>
+                    <div class="card summary-card clickable" onclick="analyzer.showHttpView()">
+                        <div class="card-icon http">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Requêtes HTTP</span>
+                            <span class="card-value" id="httpRequests">-</span>
+                        </div>
+                        <button class="btn-ai-small" onclick="event.stopPropagation(); analyzer.analyzeWithAI('http')"
+                            title="Analyser avec IA">
+                            🤖
+                        </button>
+                        <div class="card-arrow">→</div>
+                    </div>
+                    <div class="card summary-card clickable" onclick="analyzer.showHttpView()">
+                        <div class="card-icon https">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Sessions TLS</span>
+                            <span class="card-value" id="tlsSessions">-</span>
+                        </div>
+                        <div class="card-arrow">→</div>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon domains">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path
+                                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                            </svg>
+                        </div>
+                        <div class="card-content">
+                            <span class="card-label">Domaines Uniques</span>
+                            <span class="card-value" id="uniqueDomains">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card investigation-hub-card" id="investigationHubCard">
+                    <div class="investigation-hub-header">
+                        <div>
+                            <h3>🔦 Problem Spotlight</h3>
+                            <p class="investigation-hub-subtitle">Mise en surbrillance des symptômes critiques + questions guidées pour accélérer le troubleshooting.</p>
+                        </div>
+                        <div class="investigation-hub-actions">
+                            <button class="btn btn-small" id="guidedRefreshBtn">↻ Régénérer</button>
+                            <button class="btn btn-small btn-ai" id="guidedAskTopBtn">🤖 Analyser le top problème</button>
+                        </div>
+                    </div>
+                    <div class="investigation-highlights" id="problemHighlightsList">
+                        <div class="investigation-empty">Aucune analyse chargée.</div>
+                    </div>
+                    <div class="investigation-questions" id="guidedQuestionsList">
+                        <div class="investigation-empty">Les questions guidées apparaîtront ici après analyse.</div>
+                    </div>
+                    <div class="investigation-ai-preview" id="guidedAiPreview">
+                        <div class="investigation-empty">Cliquez sur une question guidée pour demander une piste à l’IA.</div>
+                    </div>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="export-section">
+                    <h3>Télécharger le rapport</h3>
+                    <div class="export-buttons">
+                        <button class="btn btn-export" id="exportJson">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            JSON
+                        </button>
+                        <button class="btn btn-export" id="exportCsv">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="8" y1="13" x2="16" y2="13" />
+                                <line x1="8" y1="17" x2="16" y2="17" />
+                            </svg>
+                            CSV
+                        </button>
+                        <button class="btn btn-export btn-primary" id="exportPdf">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <path d="M9 15l2 2 4-4" />
+                            </svg>
+                            PDF
+                        </button>
+                        <button class="btn btn-export btn-dfir" id="exportDfirPdf"
+                            title="Rapport DFIR Professionnel PDF">
+                            🔒 DFIR Report PDF
+                        </button>
+                        <button class="btn btn-export" id="exportDfirJson" title="Export DFIR JSON (SIEM/SOAR)">
+                            🔒 DFIR JSON
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <span class="tabs-active-pill" id="tabsActivePill" aria-hidden="true"></span>
+                        <button class="tab active" data-tab="overview">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7" />
+                                <rect x="14" y="3" width="7" height="7" />
+                                <rect x="14" y="14" width="7" height="7" />
+                                <rect x="3" y="14" width="7" height="7" />
+                            </svg>
+                            Vue Globale
+                        </button>
+                        <button class="tab" data-tab="dns">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="2" y1="12" x2="22" y2="12" />
+                            </svg>
+                            DNS
+                        </button>
+                        <button class="tab" data-tab="http">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                            </svg>
+                            HTTP/HTTPS
+                        </button>
+                        <button class="tab tab-team" data-tab="team-ia">
+                            🧠 Team IA
+                        </button>
+                        <button class="tab" data-tab="timeline">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            Timeline
+                        </button>
+                        <button class="tab" data-tab="streams">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                            Streams
+                        </button>
+                        <button class="tab" data-tab="multi-pcap">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="4" width="7" height="7" />
+                                <rect x="14" y="4" width="7" height="7" />
+                                <rect x="8.5" y="13" width="7" height="7" />
+                            </svg>
+                            Multi-PCAP
+                        </button>
+                        <button class="tab" data-tab="packets">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                            </svg>
+                            Paquets
+                        </button>
+                        <button class="tab tab-advanced" data-tab="tls-audit" title="TLS Security Audit">
+                            🔐 TLS Audit
+                        </button>
+                        <button class="tab tab-advanced" data-tab="threat-intel" title="Threat Intelligence">
+                            🕵️ Threat Intel
+                        </button>
+                        <button class="tab tab-advanced" data-tab="flow-behavior" title="Flow Behavior">
+                            📡 Flux C2/Exfil
+                        </button>
+                        <button class="tab tab-advanced" data-tab="lateral-movement" title="Mouvement Latéral">
+                            🔀 Lat. Movement
+                        </button>
+                        <button class="tab tab-advanced" data-tab="qos" title="QoS & Performance">
+                            📊 QoS
+                        </button>
+                        <button class="tab tab-advanced" data-tab="tcp-health" title="Diagnostic Performance TCP">
+                            🩺 TCP Health
+                        </button>
+                        <button class="tab tab-advanced" data-tab="playbook" title="IR Playbook & DFIR">
+                            📋 IR Playbook
+                        </button>
+                    </div>
+                </div>
+                <div class="menu-health-center" id="menuHealthCenter" style="display:none;">
+                    <div class="menu-health-header">
+                        <div class="menu-health-title">🩺 Menu Health Center</div>
+                        <div class="menu-health-summary" id="menuHealthSummary">En attente d'analyse...</div>
+                    </div>
+                    <div class="menu-health-items" id="menuHealthItems"></div>
+                </div>
+
+                <!-- Tab Content: Overview -->
+                <div class="tab-content active" id="tab-overview">
+                    <!-- Charts -->
+                    <div class="charts-grid">
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>
+                                    Distribution des Protocoles
+                                    <button class="btn-ai-small" onclick="analyzer.analyzeWithAI('protocols')"
+                                        title="Analyser avec IA">🤖</button>
+                                </h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('protocolChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="protocolChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Distribution des Flags TCP</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('flagsChart')" title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="flagsChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3 class="clickable-title" onclick="analyzer.showIpDetailsFromChart()">
+                                    Top 10 IPs Sources
+                                    <button class="btn-ai-small"
+                                        onclick="event.stopPropagation(); analyzer.analyzeWithAI('top_ips')"
+                                        title="Analyser avec IA">🤖</button>
+                                </h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn" onclick="analyzer.resetZoom('topIps')"
+                                        title="Reset zoom">⟲</button>
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('topIpsChart')" title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="topIpsChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>
+                                    Anomalies par Type
+                                    <button class="btn-ai-small" onclick="analyzer.analyzeWithAI('anomalies')"
+                                        title="Analyser avec IA">🤖</button>
+                                </h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('anomaliesChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="anomaliesChart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- New charts grid -->
+                    <div class="charts-grid charts-grid-premium">
+                        <!-- Traffic Timeline Chart -->
+                        <div class="card chart-card chart-card-wide">
+                            <div class="chart-header">
+                                <h3>Trafic dans le Temps</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.resetZoom('trafficTimeline')" title="Reset zoom">⟲</button>
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('trafficTimelineChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="trafficTimelineChart" style="height: 280px;"></div>
+                        </div>
+                        <!-- Heatmap temporelle -->
+                        <div class="card chart-card chart-card-wide">
+                            <div class="chart-header">
+                                <h3>Heatmap Temporelle</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('heatmapChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="heatmapChart" style="height: 220px;"></div>
+                        </div>
+
+                        <!-- Treemap protocoles -->
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Treemap Protocoles</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('treemapChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="treemapChart" style="height: 300px;"></div>
+                        </div>
+
+                        <!-- Sankey network flow -->
+                        <div class="card chart-card chart-card-wide">
+                            <div class="chart-header">
+                                <h3>Network Flow (Sankey)</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('sankeyChart')" title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="sankeyChart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Tables -->
+                    <div class="tables-section">
+                        <!-- TCP Sessions -->
+                        <div class="card table-card">
+                            <h3>Sessions TCP (Top 20) <button class="btn btn-small"
+                                    onclick="analyzer.showTcpSessionsView()">Voir tout →</button></h3>
+                            <div class="table-wrapper">
+                                <table id="sessionsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Source</th>
+                                            <th>Destination</th>
+                                            <th>État</th>
+                                            <th>Paquets</th>
+                                            <th>Retrans.</th>
+                                            <th>RST</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Anomalies -->
+                        <div class="card table-card">
+                            <h3>
+                                Anomalies Détectées
+                                <button class="btn btn-small btn-ai" onclick="analyzer.analyzeWithAI('anomalies')">🤖
+                                    Analyser</button>
+                                <button class="btn btn-small" onclick="analyzer.showAnomaliesView()">Voir tout
+                                    →</button>
+                            </h3>
+                            <div class="table-wrapper">
+                                <table id="anomaliesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Sévérité</th>
+                                            <th>Score</th>
+                                            <th>Description</th>
+                                            <th>IP Source</th>
+                                            <th>IA</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- MAC / Vendors -->
+                        <div class="card table-card">
+                            <h3>Top Équipements (MAC / Constructeur)</h3>
+                            <div class="table-wrapper">
+                                <table id="macVendorsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Adresse MAC</th>
+                                            <th>Constructeur</th>
+                                            <th>Paquets</th>
+                                            <th>Rôle</th>
+                                            <th>Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: DNS -->
+                <div class="tab-content" id="tab-dns">
+                    <div class="charts-grid">
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Top Domaines DNS</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('dnsDomainsChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="dnsDomainsChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Types de Requêtes DNS</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('dnsTypesChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="dnsTypesChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Codes de Réponse DNS</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('dnsResponseCodesChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="dnsResponseCodesChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <h3>Temps de Réponse DNS (ms)</h3>
+                            <div class="dns-stats" id="dnsResponseTimeStats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Moyen</span>
+                                    <span class="stat-value" id="dnsAvgTime">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Min</span>
+                                    <span class="stat-value" id="dnsMinTime">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Max</span>
+                                    <span class="stat-value" id="dnsMaxTime">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tables-section">
+                        <div class="card table-card">
+                            <h3>
+                                Top 20 Domaines interrogés
+                                <button class="btn btn-small btn-ai" onclick="analyzer.analyzeWithAI('dns')">🤖 Analyser
+                                    les domaines</button>
+                            </h3>
+                            <div class="table-wrapper">
+                                <table id="dnsDomainsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Domaine</th>
+                                            <th>Requêtes</th>
+                                            <th>Types</th>
+                                            <th>IA</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card table-card">
+                            <h3>Anomalies DNS</h3>
+                            <div class="table-wrapper">
+                                <table id="dnsAnomaliesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Sévérité</th>
+                                            <th>Description</th>
+                                            <th>Recommandation</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: HTTP/HTTPS -->
+                <div class="tab-content" id="tab-http">
+                    <div class="charts-grid">
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Méthodes HTTP</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('httpMethodsChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="httpMethodsChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Status Codes HTTP</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('httpStatusChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="httpStatusChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Top Hosts</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('httpHostsChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="httpHostsChart" style="height: 300px;"></div>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3>Versions TLS</h3>
+                                <div class="chart-actions">
+                                    <button type="button" class="chart-btn"
+                                        onclick="analyzer.fullscreenChart('tlsVersionsChart')"
+                                        title="Plein écran">⛶</button>
+                                </div>
+                            </div>
+                            <div id="tlsVersionsChart" style="height: 300px;"></div>
+                        </div>
+                    </div>
+                    <div class="http-data-hint" id="httpDataHint"></div>
+
+                    <div class="tables-section">
+                        <div class="card table-card">
+                            <h3>
+                                Top User-Agents
+                                <button class="btn btn-small btn-ai" onclick="analyzer.analyzeWithAI('http')">🤖
+                                    Analyser HTTP</button>
+                            </h3>
+                            <div class="table-wrapper">
+                                <table id="userAgentsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>User-Agent</th>
+                                            <th>Requêtes</th>
+                                            <th>IA</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card table-card">
+                            <h3>Top URLs</h3>
+                            <div class="table-wrapper">
+                                <table id="urlsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>URL</th>
+                                            <th>Requêtes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card table-card">
+                            <h3>Top SNI HTTPS</h3>
+                            <div class="table-wrapper">
+                                <table id="sniHostsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>SNI / Domaine TLS</th>
+                                            <th>Sessions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card table-card full-width">
+                            <h3>Requêtes HTTP Décodées</h3>
+                            <div class="table-wrapper">
+                                <table id="httpRequestsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Horodatage</th>
+                                            <th>Méthode</th>
+                                            <th>Hôte</th>
+                                            <th>URL / Path</th>
+                                            <th>Source</th>
+                                            <th>User-Agent</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card table-card full-width">
+                            <h3>Anomalies HTTP</h3>
+                            <div class="table-wrapper">
+                                <table id="httpAnomaliesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Type</th>
+                                            <th>Sévérité</th>
+                                            <th>Description</th>
+                                            <th>Recommandation</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: AI Insights -->
+                <div class="tab-content" id="tab-ai-insights">
+                    <div class="ai-analysis-section">
+                        <div class="ai-header">
+                            <h3>🤖 Analyse IA avec Ollama</h3>
+                            <p class="ai-subtitle">Sélectionnez le type d'analyse que vous souhaitez effectuer</p>
+                        </div>
+
+                        <div class="ai-buttons-grid">
+                            <button class="ai-btn ai-btn-summary" onclick="analyzer.generateSpecificAI('summary')"
+                                id="aiBtn-summary">
+                                <div class="ai-btn-icon">📊</div>
+                                <div class="ai-btn-content">
+                                    <span class="ai-btn-title">Résumé Exécutif</span>
+                                    <small class="ai-btn-desc">Vue d'ensemble complète du trafic</small>
+                                </div>
+                            </button>
+
+                            <button class="ai-btn ai-btn-dns" onclick="analyzer.generateSpecificAI('dns')"
+                                id="aiBtn-dns">
+                                <div class="ai-btn-icon">🌐</div>
+                                <div class="ai-btn-content">
+                                    <span class="ai-btn-title">Analyse DNS</span>
+                                    <small class="ai-btn-desc">Détection de domaines suspects</small>
+                                </div>
+                            </button>
+
+                            <button class="ai-btn ai-btn-http" onclick="analyzer.generateSpecificAI('http')"
+                                id="aiBtn-http">
+                                <div class="ai-btn-icon">🔗</div>
+                                <div class="ai-btn-content">
+                                    <span class="ai-btn-title">Analyse HTTP/HTTPS</span>
+                                    <small class="ai-btn-desc">Analyse du trafic web</small>
+                                </div>
+                            </button>
+
+                            <button class="ai-btn ai-btn-troubleshoot"
+                                onclick="analyzer.generateSpecificAI('troubleshoot')" id="aiBtn-troubleshoot">
+                                <div class="ai-btn-icon">🔧</div>
+                                <div class="ai-btn-content">
+                                    <span class="ai-btn-title">Dépannage Réseau</span>
+                                    <small class="ai-btn-desc">Solutions & recommandations</small>
+                                </div>
+                            </button>
+
+                            <button class="ai-btn ai-btn-full" onclick="analyzer.generateSpecificAI('full')"
+                                id="aiBtn-full">
+                                <div class="ai-btn-icon">🚀</div>
+                                <div class="ai-btn-content">
+                                    <span class="ai-btn-title">Analyse Complète</span>
+                                    <small class="ai-btn-desc">Toutes les analyses en une fois</small>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div id="ai-loader" class="ai-loader" style="display: none;">
+                            <div class="spinner"></div>
+                            <p class="ai-loader-text">Analyse en cours avec Ollama...</p>
+                            <small class="ai-loader-subtext">Cela peut prendre quelques secondes</small>
+                        </div>
+
+                        <div id="ai-results" class="ai-results-container" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Team IA -->
+                <div class="tab-content" id="tab-team-ia">
+                    <div class="team-ia-section">
+                        <div class="team-header">
+                            <div class="team-title-group">
+                                <h2 class="team-title">🛡️ Cyber Investigation Team</h2>
+                                <p class="team-subtitle">4 agents cyber spécialisés collaborent pour analyser les
+                                    menaces de votre capture réseau</p>
+                            </div>
+                            <button class="btn btn-team-launch" id="launchTeamBtn"
+                                onclick="analyzer.launchTeamAnalysis()">
+                                <span class="btn-team-icon">🚀</span>
+                                <span>Lancer l'équipe complète</span>
+                            </button>
+                        </div>
+
+                        <!-- Agent Cards -->
+                        <div class="agents-grid">
+                            <div class="agent-card" id="agent-brainstormer" data-agent="brainstormer">
+                                <div class="agent-status-dot" id="status-brainstormer"></div>
+                                <div class="agent-avatar">🎯</div>
+                                <div class="agent-info">
+                                    <h4>Threat Hunter</h4>
+                                    <p>Détection & Hypothèses de menaces</p>
+                                </div>
+                                <div class="agent-state" id="state-brainstormer">En attente</div>
+                                <button class="btn btn-agent-solo" onclick="analyzer.launchSingleAgent('brainstormer')"
+                                    title="Lancer cet agent seul">▶</button>
+                            </div>
+                            <div class="agent-card" id="agent-chef_projet" data-agent="chef_projet">
+                                <div class="agent-status-dot" id="status-chef_projet"></div>
+                                <div class="agent-avatar">🛡️</div>
+                                <div class="agent-info">
+                                    <h4>Incident Commander</h4>
+                                    <p>Coordination & Plan de réponse</p>
+                                </div>
+                                <div class="agent-state" id="state-chef_projet">En attente</div>
+                                <button class="btn btn-agent-solo" onclick="analyzer.launchSingleAgent('chef_projet')"
+                                    title="Lancer cet agent seul">▶</button>
+                            </div>
+                            <div class="agent-card" id="agent-programmeur" data-agent="programmeur">
+                                <div class="agent-status-dot" id="status-programmeur"></div>
+                                <div class="agent-avatar">🔬</div>
+                                <div class="agent-info">
+                                    <h4>Forensic Engineer</h4>
+                                    <p>Analyse technique & Outils</p>
+                                </div>
+                                <div class="agent-state" id="state-programmeur">En attente</div>
+                                <button class="btn btn-agent-solo" onclick="analyzer.launchSingleAgent('programmeur')"
+                                    title="Lancer cet agent seul">▶</button>
+                            </div>
+                            <div class="agent-card" id="agent-validateur" data-agent="validateur">
+                                <div class="agent-status-dot" id="status-validateur"></div>
+                                <div class="agent-avatar">🔍</div>
+                                <div class="agent-info">
+                                    <h4>SOC Analyst</h4>
+                                    <p>Validation & Score de risque</p>
+                                </div>
+                                <div class="agent-state" id="state-validateur">En attente</div>
+                                <button class="btn btn-agent-solo" onclick="analyzer.launchSingleAgent('validateur')"
+                                    title="Lancer cet agent seul">▶</button>
+                            </div>
+                        </div>
+
+                        <!-- Team Progress Bar -->
+                        <div class="team-progress" id="teamProgress" style="display: none;">
+                            <div class="team-progress-bar">
+                                <div class="team-progress-fill" id="teamProgressFill"></div>
+                            </div>
+                            <div class="team-progress-steps">
+                                <div class="progress-step" id="step-brainstormer"><span>🎯</span></div>
+                                <div class="progress-step" id="step-chef_projet"><span>🛡️</span></div>
+                                <div class="progress-step" id="step-programmeur"><span>🔬</span></div>
+                                <div class="progress-step" id="step-validateur"><span>🔍</span></div>
+                                <div class="progress-step" id="step-red_team"><span>💀</span></div>
+                            </div>
+                            <p class="team-progress-text" id="teamProgressText">Initialisation de l'équipe...</p>
+                        </div>
+
+                        <!-- Team Results -->
+                        <div class="team-results" id="teamResults" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Timeline -->
+                <div class="tab-content" id="tab-timeline">
+                    <div class="section-header">
+                        <h2>📊 Timeline des Événements</h2>
+                        <p>Visualisation temporelle du trafic réseau</p>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">⏱️</div>
+                            <div class="stat-content">
+                                <span class="stat-label">Durée totale</span>
+                                <span class="stat-value" id="timelineDuration">-</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📈</div>
+                            <div class="stat-content">
+                                <span class="stat-label">Paquets/sec</span>
+                                <span class="stat-value" id="timelinePacketsPerSec">-</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🔝</div>
+                            <div class="stat-content">
+                                <span class="stat-label">Pic d'activité</span>
+                                <span class="stat-value" id="timelinePeakTime">-</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-content">
+                                <span class="stat-label">Événements</span>
+                                <span class="stat-value" id="timelineTotalEvents">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📈 Visualisation Temporelle</h3>
+                            <div class="card-actions">
+                                <button class="btn btn-icon" id="timelinePlayBtn"
+                                    onclick="analyzer.toggleTimelinePlayback()" title="Lecture">▶️</button>
+                                <button class="btn btn-icon" onclick="analyzer.timeline?.fit()"
+                                    title="Ajuster la vue">🔍</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="timelineVis" style="height: 500px; border-radius: var(--radius-md);"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Streams -->
+                <div class="tab-content" id="tab-streams">
+                    <div class="section-header">
+                        <h2>🌊 Streams TCP</h2>
+                        <p>Analyse des flux de communication TCP et détection des sessions instables</p>
+                    </div>
+
+                    <div class="card table-card full-width">
+                        <div class="packet-filter-bar stream-filter-bar">
+                            <div class="filter-input-wrapper">
+                                <span class="filter-input-icon">🔍</span>
+                                <input type="text" id="streamIpFilter"
+                                    placeholder="Filtrer IP (source ou destination)">
+                            </div>
+                            <select id="streamTypeFilter" class="filter-select">
+                                <option value="">Tous types</option>
+                                <option value="http">HTTP</option>
+                                <option value="https">HTTPS/TLS</option>
+                            </select>
+                            <select id="streamSortBy" class="filter-select">
+                                <option value="risk">Tri: risque</option>
+                                <option value="packets">Tri: paquets</option>
+                                <option value="retrans">Tri: retransmissions</option>
+                                <option value="bytes">Tri: volume</option>
+                                <option value="rst">Tri: reset TCP</option>
+                            </select>
+                            <select id="streamPageSize" class="filter-select">
+                                <option value="50">50 / page</option>
+                                <option value="100" selected>100 / page</option>
+                                <option value="200">200 / page</option>
+                            </select>
+                            <label class="filter-toggle">
+                                <input type="checkbox" id="streamProblematicOnly">
+                                <span>Seulement flux suspects</span>
+                            </label>
+                            <button type="button" class="btn-secondary btn-sm" id="streamRefreshBtn">🔄 Actualiser</button>
+                            <button type="button" class="btn-secondary btn-sm" id="streamResetBtn">Réinitialiser</button>
+                            <button type="button" class="btn-secondary btn-sm" id="streamExportProblematicBtn">📤 Export CSV flux suspects</button>
+                            <div class="stream-page-controls">
+                                <button type="button" class="btn-secondary btn-sm" id="streamPrevBtn">← Précédent</button>
+                                <span id="streamPageInfo">Page 1</span>
+                                <button type="button" class="btn-secondary btn-sm" id="streamNextBtn">Suivant →</button>
+                            </div>
+                        </div>
+
+                        <div class="stream-kpi-grid">
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Flux affichés</div>
+                                <div class="stream-kpi-value" id="streamsCount">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Flux suspects</div>
+                                <div class="stream-kpi-value" id="streamsSuspiciousCount">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Retransmissions</div>
+                                <div class="stream-kpi-value" id="streamsRetransTotal">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Reset TCP (RST)</div>
+                                <div class="stream-kpi-value" id="streamsRstTotal">0</div>
+                            </div>
+                        </div>
+
+                        <h3>Liste des Streams <span class="stream-subtitle" id="streamsTotalLabel"></span></h3>
+                        <div class="table-wrapper">
+                            <table id="streamsTable">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Source</th>
+                                        <th>Destination</th>
+                                        <th>Paquets</th>
+                                        <th>Volume</th>
+                                        <th>Type</th>
+                                        <th>État</th>
+                                        <th>Retrans.</th>
+                                        <th>RST</th>
+                                        <th>Risque</th>
+                                        <th>Cause probable</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card" id="streamDetailContainer" style="display: none;">
+                        <div class="card-header">
+                            <h3>Détails du Stream <span id="streamDetailId"></span></h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="streamConversation"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Multi-PCAP -->
+                <div class="tab-content" id="tab-multi-pcap">
+                    <div class="section-header">
+                        <h2>🧩 Analyse Multi-PCAP End-to-End</h2>
+                        <p>Corrélation multi-hop entre équipements (firewall, routeur, LB, proxy, sonde, client/serveur)</p>
+                    </div>
+
+                    <div class="card full-width">
+                        <div class="multi-pcap-upload-zone" id="multiUploadArea">
+                            <div class="upload-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                            </div>
+                            <h3>Importer plusieurs captures</h3>
+                            <p>Glissez-déposez plusieurs fichiers ou cliquez pour sélectionner</p>
+                            <p class="file-info">Formats acceptés: .pcap, .pcapng, .cap</p>
+                            <input type="file" id="multiFileInput" accept=".pcap,.pcapng,.cap" multiple hidden>
+                        </div>
+
+                        <div class="multi-pcap-controls">
+                            <label class="filter-group">
+                                <span>Tolérance temporelle (sec)</span>
+                                <input id="multiTimeTolerance" type="number" min="0.2" step="0.5" value="5">
+                            </label>
+                            <label class="filter-group">
+                                <span>Max paquets / capture</span>
+                                <input id="multiMaxPackets" type="number" min="1000" step="1000" value="250000">
+                            </label>
+                            <details class="multi-thresholds-panel">
+                                <summary>⚙️ Seuils root-cause avancés</summary>
+                                <div class="multi-thresholds-grid">
+                                    <label class="filter-group">
+                                        <span>Retrans medium (%)</span>
+                                        <input id="multiThrRetransMedium" type="number" min="0" max="1" step="0.005" value="0.03">
+                                    </label>
+                                    <label class="filter-group">
+                                        <span>Retrans high (%)</span>
+                                        <input id="multiThrRetransHigh" type="number" min="0" max="1" step="0.005" value="0.08">
+                                    </label>
+                                    <label class="filter-group">
+                                        <span>Latence segment medium (ms)</span>
+                                        <input id="multiThrLatencyMedium" type="number" min="1" step="1" value="60">
+                                    </label>
+                                    <label class="filter-group">
+                                        <span>Latence segment high (ms)</span>
+                                        <input id="multiThrLatencyHigh" type="number" min="1" step="1" value="120">
+                                    </label>
+                                    <label class="filter-group">
+                                        <span>Trigger score segment</span>
+                                        <input id="multiThrSegmentTrigger" type="number" min="1" max="100" step="1" value="45">
+                                    </label>
+                                    <label class="filter-group">
+                                        <span>Bufferbloat ratio durée</span>
+                                        <input id="multiThrBufferbloatDuration" type="number" min="1" step="0.1" value="2.2">
+                                    </label>
+                                </div>
+                            </details>
+                            <button class="btn btn-secondary" id="multiClearBtn">Vider la sélection</button>
+                            <button class="btn btn-primary" id="multiAnalyzeBtn">🚀 Lancer corrélation multi-PCAP</button>
+                            <span class="stream-subtitle" id="multiAnalyzeStatus">Aucune analyse en cours</span>
+                        </div>
+                    </div>
+
+                    <div class="card table-card full-width">
+                        <h3>Points de capture chargés</h3>
+                        <div class="table-wrapper">
+                            <table id="multiCaptureTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Fichier</th>
+                                        <th>Stats Capture</th>
+                                        <th>Horodatage</th>
+                                        <th>Équipement</th>
+                                        <th>Position</th>
+                                        <th>Commentaire</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="multiResultsSection" style="display:none;">
+                        <div class="multi-global-drilldown">
+                            <div class="stream-subtitle" id="multiThresholdInfo">Seuils root-cause par défaut actifs.</div>
+                            <div class="multi-global-drilldown-grid">
+                                <div class="filter-input-wrapper">
+                                    <span class="filter-input-icon">🎯</span>
+                                    <input type="text" id="multiGlobalSearch" placeholder="Drilldown global: IP / équipement / cause">
+                                </div>
+                                <select id="multiGlobalProtocol" class="filter-select">
+                                    <option value="">Protocole: tous</option>
+                                    <option value="TCP">TCP</option>
+                                    <option value="UDP">UDP</option>
+                                    <option value="HTTP">HTTP</option>
+                                    <option value="HTTPS">HTTPS</option>
+                                </select>
+                                <select id="multiGlobalRiskMin" class="filter-select">
+                                    <option value="0">Risque min: 0</option>
+                                    <option value="40">Risque min: 40</option>
+                                    <option value="70">Risque min: 70</option>
+                                </select>
+                                <button type="button" class="btn-secondary btn-sm" id="multiDrillApplyBtn">Appliquer partout</button>
+                                <button type="button" class="btn-secondary btn-sm" id="multiDrillResetBtn">Reset drilldown</button>
+                                <button type="button" class="btn-secondary btn-sm" id="multiDrillExportBtn">📤 Export snapshot</button>
+                            </div>
+                        </div>
+                        <div class="stream-kpi-grid">
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Points de capture</div>
+                                <div class="stream-kpi-value" id="multiTotalCaptures">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Sessions corrélées</div>
+                                <div class="stream-kpi-value" id="multiCorrelatedSessions">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Sessions problématiques</div>
+                                <div class="stream-kpi-value" id="multiProblemSessions">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Segment le plus lent</div>
+                                <div class="stream-kpi-value" id="multiSlowestSegment">-</div>
+                            </div>
+                        </div>
+                        <div class="stream-kpi-grid multi-kpi-grid">
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Paquets observés</div>
+                                <div class="stream-kpi-value" id="multiTotalPacketsObserved">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Volume observé</div>
+                                <div class="stream-kpi-value" id="multiTotalBytesObserved">0 B</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Sessions affichées</div>
+                                <div class="stream-kpi-value" id="multiFilteredSessions">0</div>
+                            </div>
+                            <div class="stream-kpi-card">
+                                <div class="stream-kpi-label">Risque moyen affiché</div>
+                                <div class="stream-kpi-value" id="multiAvgRisk">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Chaîne & goulot d'étranglement : waterfall des segments,
+                             verdict du segment critique et débit par point de capture -->
+                        <div class="card full-width bnk-card" id="multiBottleneckSection">
+                            <div class="bnk-header">
+                                <h3>🚦 Chaîne &amp; goulot d'étranglement</h3>
+                                <span class="stream-subtitle" id="multiBottleneckMethod"></span>
+                            </div>
+
+                            <div class="bnk-alert" id="multiClockWarning" style="display:none;"></div>
+                            <div class="bnk-flow-chips" id="multiFlowLimitationChips"></div>
+
+                            <div class="bnk-grid">
+                                <div class="bnk-col">
+                                    <h4 class="bnk-subtitle">Waterfall de la chaîne</h4>
+                                    <div class="bnk-hint">Un rang par point de capture, une barre par segment. Clic = filtrer les sessions sur le segment.</div>
+                                    <div id="multiChainWaterfall" class="bnk-waterfall"></div>
+                                </div>
+                                <div class="bnk-col">
+                                    <h4 class="bnk-subtitle">Verdict du segment le plus problématique</h4>
+                                    <div id="multiBottleneckVerdict" class="bnk-verdict"></div>
+                                </div>
+                            </div>
+
+                            <h4 class="bnk-subtitle">Débit par point de capture — où le débit chute</h4>
+                            <div id="multiBandwidthChainChart" class="bnk-chart"></div>
+                        </div>
+
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel">
+                                <h3>📦 Volumétrie par équipement</h3>
+                                <div id="multiCaptureVolChart" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🧪 Santé des segments</h3>
+                                <div id="multiSegmentHealthChart" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🕸️ Chaîne d'équipements (global)</h3>
+                                <div id="multiEquipmentChainGraph" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel full-width">
+                                <h3>🕵️ Root-Cause Matrix (équipements suspects)</h3>
+                                <div class="stream-subtitle" id="multiSegmentFilterInfo">Clique un segment pour filtrer les sessions.</div>
+                                <div class="table-wrapper">
+                                    <table id="multiCulpritTable" class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Équipement</th>
+                                                <th>Score</th>
+                                                <th>Confiance</th>
+                                                <th>Sessions</th>
+                                                <th>Haut risque</th>
+                                                <th>Causes dominantes</th>
+                                                <th>IPs impactées</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card table-card full-width">
+                            <div class="packet-filter-bar stream-filter-bar">
+                                <label class="filter-toggle">
+                                    <input type="checkbox" id="multiProblematicOnly" checked>
+                                    <span>Seulement sessions problématiques</span>
+                                </label>
+                                <div class="filter-input-wrapper">
+                                    <span class="filter-input-icon">🔎</span>
+                                    <input type="text" id="multiSessionSearch" placeholder="Rechercher flux / IP / cause">
+                                </div>
+                                <select id="multiProtocolFilter" class="filter-select">
+                                    <option value="">Tous protocoles</option>
+                                </select>
+                                <select id="multiConfidenceFilter" class="filter-select">
+                                    <option value="">Toutes confiances</option>
+                                    <option value="HIGH">HIGH</option>
+                                    <option value="MEDIUM">MEDIUM</option>
+                                    <option value="LOW">LOW</option>
+                                </select>
+                                <select id="multiSortBy" class="filter-select">
+                                    <option value="risk">Tri: risque</option>
+                                    <option value="changes">Tri: changements</option>
+                                    <option value="latency">Tri: latence</option>
+                                    <option value="confidence">Tri: confiance</option>
+                                </select>
+                                <button type="button" class="btn-secondary btn-sm" id="multiResetFiltersBtn">Réinitialiser filtres</button>
+                                <button type="button" class="btn-secondary btn-sm" id="multiReloadResultsBtn">🔄 Recharger</button>
+                                <button type="button" class="btn-secondary btn-sm" id="multiExportCsvBtn">📤 Export CSV</button>
+                                <button type="button" class="btn-secondary btn-sm" id="multiExportDfirBtn">🧾 Export DFIR JSON</button>
+                            </div>
+                            <div class="multi-cause-chips" id="multiCauseChips"></div>
+                            <h3>Sessions corrélées multi-hop</h3>
+                            <div class="table-wrapper">
+                                <table id="multiSessionsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Flux</th>
+                                            <th>Protocole</th>
+                                            <th>Présence</th>
+                                            <th>Risque</th>
+                                            <th>Cause probable</th>
+                                            <th>Latence cumulée</th>
+                                            <th>Confiance</th>
+                                            <th>Changements</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card full-width" id="multiSessionDetailContainer" style="display:none;">
+                            <div class="card-header">
+                                <h3>Détails Session Multi-Hop <span id="multiSessionDetailTitle"></span></h3>
+                            </div>
+                            <div class="card-body" id="multiSessionDetailBody"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Packets -->
+                <div class="tab-content" id="tab-packets">
+                    <div class="card table-card full-width">
+                        <!-- Filter bar -->
+                        <div class="packet-filter-bar">
+                            <div class="filter-input-wrapper">
+                                <span class="filter-icon">🔍</span>
+                                <input type="text" id="packetFilterInput"
+                                    placeholder="Filtrer paquets... (ex: 192.168, tcp, port:80)"
+                                    oninput="analyzer.onPacketFilterInput(this.value)">
+                            </div>
+                            <select id="protoFilter" onchange="analyzer.applyPacketFilters()" class="filter-select">
+                                <option value="">Tous protocoles</option>
+                                <option value="TCP">TCP</option>
+                                <option value="UDP">UDP</option>
+                                <option value="DNS">DNS</option>
+                                <option value="HTTP">HTTP</option>
+                                <option value="ICMP">ICMP</option>
+                                <option value="ARP">ARP</option>
+                            </select>
+                            <label class="filter-toggle">
+                                <input type="checkbox" id="regexToggle" onchange="analyzer.applyPacketFilters()">
+                                <span>Regex</span>
+                            </label>
+                            <button type="button" class="btn-secondary btn-sm" onclick="analyzer.saveCurrentFilter()">💾
+                                Sauvegarder</button>
+                            <div id="savedFilters" class="saved-filters"></div>
+                        </div>
+
+                        <!-- Stats filtrés -->
+                        <div class="filter-stats" id="filterStats"></div>
+
+                        <!-- Virtual scroll container -->
+                        <div id="packetVirtualContainer" style="height: 500px; overflow-y: auto; position: relative;">
+                            <div id="packetVirtualSpacer" style="position: relative;">
+                                <table class="data-table resizable-table" id="packetTable">
+                                    <thead>
+                                        <tr>
+                                            <th data-col="num" style="width:60px">#<span class="col-resizer"></span>
+                                            </th>
+                                            <th data-col="time" style="width:130px">Temps<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="src" style="width:150px">Source<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="dst" style="width:150px">Destination<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="proto" style="width:100px">Protocole<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="len" style="width:80px">Taille<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="flags" style="width:120px">Flags<span
+                                                    class="col-resizer"></span></th>
+                                            <th data-col="info">Info<span class="col-resizer"></span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="packetTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- ========== TAB: TLS AUDIT ========== -->
+                <div class="tab-content" id="tab-tls-audit">
+                    <div class="section-header">
+                        <h2>🔐 TLS Security Audit</h2>
+                        <p>Analyse de sécurité TLS style SSL Labs — Score, grade, JA3 malware matching</p>
+                    </div>
+                    <div class="adv-loading" id="tls-audit-loading" style="display:none">
+                        <div class="spinner"></div><span>Analyse TLS en cours...</span>
+                    </div>
+                    <div id="tls-audit-content">
+                        <div class="tls-grade-section" id="tlsGradeSection" style="display:none">
+                            <div class="tls-grade-card">
+                                <div class="tls-grade-badge" id="tlsGradeBadge">?</div>
+                                <div class="tls-grade-info">
+                                    <div class="tls-score" id="tlsScore">-</div>
+                                    <div class="tls-score-label">Score de sécurité TLS</div>
+                                    <div id="tlsSummaryStats" class="tls-summary-stats"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel full-width">
+                                <h3>🤝 TCP/TLS Handshake Insights</h3>
+                                <p class="adv-muted" style="margin-bottom:0.45rem;">
+                                    Risque <strong>global</strong> = max(risque transport TCP, risque sécurité TLS).
+                                </p>
+                                <div class="adv-summary-row" id="tlsHandshakeSummaryCards"></div>
+                                <div class="stream-filter-bar" style="margin-top:0.5rem;">
+                                    <div class="filter-input-wrapper">
+                                        <span class="filter-input-icon">🔎</span>
+                                        <input type="text" id="tlsSessionSearch" placeholder="Filtrer sessions TLS (IP, SNI, JA3)">
+                                    </div>
+                                    <select id="tlsSessionSelect" class="filter-select">
+                                        <option value="">Sélectionner une session TLS</option>
+                                    </select>
+                                </div>
+                                <div class="adv-panels-grid" style="margin-top:0.6rem;">
+                                    <div class="card adv-panel">
+                                        <h4>3-Way Handshake (session sélectionnée)</h4>
+                                        <div id="tlsHandshakeFlowChart" style="height:280px"></div>
+                                    </div>
+                                    <div class="card adv-panel">
+                                        <h4>Métriques session TLS/TCP</h4>
+                                        <div id="tlsSessionMetricsTable" class="adv-table-container"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔴 Findings Critiques</h3>
+                                <div id="tlsCriticalFindings" class="adv-findings-list"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🟠 Avertissements</h3>
+                                <div id="tlsWarnings" class="adv-findings-list"></div>
+                            </div>
+                            <div class="card adv-panel full-width">
+                                <h3>💀 JA3 Malware Matches</h3>
+                                <div id="tlsMalwareMatches" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔑 Top Cipher Suites</h3>
+                                <div id="tlsCiphers" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>📊 Distribution Versions TLS</h3>
+                                <div id="tlsVersionDistChart" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>✅ Recommandations</h3>
+                                <div id="tlsRecommendations" class="adv-findings-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: THREAT INTELLIGENCE ========== -->
+                <div class="tab-content" id="tab-threat-intel">
+                    <div class="section-header">
+                        <h2>🕵️ Threat Intelligence</h2>
+                        <p>Enrichissement multi-sources: AbuseIPDB, FeodoTracker, URLhaus</p>
+                    </div>
+                    <div class="adv-loading" id="threat-intel-loading" style="display:none">
+                        <div class="spinner"></div><span>Interrogation des sources Threat Intel...</span>
+                    </div>
+                    <div id="threat-intel-content">
+                        <div class="adv-ti-summary" id="tiSummaryCards"></div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel">
+                                <h3>📈 Score Distribution</h3>
+                                <div id="tiScoreDistChart" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🛰️ Couverture des Sources</h3>
+                                <div id="tiSourceCoverageChart" style="height:260px"></div>
+                            </div>
+                            <div class="card adv-panel full-width">
+                                <h3>🌍 Pays les plus risqués</h3>
+                                <div id="tiCountryRiskTable" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel full-width">
+                                <h3>🔴 IoCs Critiques</h3>
+                                <div id="tiCriticalIocs" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🌍 Réputation IPs</h3>
+                                <div id="tiIpIntel" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🌐 Domaines Malveillants</h3>
+                                <div id="tiDomainIntel" class="adv-table-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: FLOW BEHAVIOR ========== -->
+                <div class="tab-content" id="tab-flow-behavior">
+                    <div class="section-header">
+                        <h2>📡 Détection Beaconing C2 &amp; Exfiltration</h2>
+                        <p>Analyse comportementale des flux: intervalles, jitter, ratio upload/download</p>
+                    </div>
+                    <div class="adv-loading" id="flow-behavior-loading" style="display:none">
+                        <div class="spinner"></div><span>Analyse comportementale en cours...</span>
+                    </div>
+                    <div id="flow-behavior-content">
+                        <div class="adv-summary-row" id="flowSummaryCards"></div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel full-width">
+                                <h3>🎯 Alertes Beaconing C2</h3>
+                                <div id="flowBeaconing" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel full-width">
+                                <h3>📤 Alertes Exfiltration</h3>
+                                <div id="flowExfiltration" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔑 Flow Fingerprints</h3>
+                                <div id="flowFingerprints" class="adv-table-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: LATERAL MOVEMENT ========== -->
+                <div class="tab-content" id="tab-lateral-movement">
+                    <div class="section-header">
+                        <h2>🔀 Mouvement Latéral</h2>
+                        <p>Détection de pivots, Pass-the-Hash, Kerberoasting, énumération LDAP</p>
+                    </div>
+                    <div class="adv-loading" id="lateral-movement-loading" style="display:none">
+                        <div class="spinner"></div><span>Analyse du mouvement latéral...</span>
+                    </div>
+                    <div id="lateral-movement-content">
+                        <div class="adv-summary-row" id="lmSummaryCards"></div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel">
+                                <h3>🔀 Hosts Pivots</h3>
+                                <div id="lmPivots" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔑 Pass-the-Hash</h3>
+                                <div id="lmPth" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🎫 Kerberoasting</h3>
+                                <div id="lmKerb" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>📖 Énumération LDAP</h3>
+                                <div id="lmLdap" class="adv-table-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: QoS ========== -->
+                <div class="tab-content" id="tab-qos">
+                    <div class="section-header">
+                        <h2>📊 QoS &amp; Performance Réseau</h2>
+                        <p>RTT percentiles (p50/p95/p99), retransmissions TCP, jitter</p>
+                    </div>
+                    <div class="adv-loading" id="qos-loading" style="display:none">
+                        <div class="spinner"></div><span>Calcul des métriques QoS...</span>
+                    </div>
+                    <div id="qos-content">
+                        <div class="adv-qos-grid" id="qosMetricsCards"></div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel">
+                                <h3>⏱️ Distribution RTT</h3>
+                                <div id="qosRttChart" style="height:280px"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔄 Stats TCP</h3>
+                                <div id="qosTcpStats" class="adv-table-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: TCP HEALTH ========== -->
+                <div class="tab-content" id="tab-tcp-health">
+                    <div class="section-header">
+                        <h2>🩺 Diagnostic Performance TCP</h2>
+                        <p>Window Size, ralentissements, bursts, goulots d'étranglement, IPs problématiques</p>
+                    </div>
+                    <div class="adv-loading" id="tcp-health-loading" style="display:none">
+                        <div class="spinner"></div><span>Analyse avancée des métriques TCP...</span>
+                    </div>
+                    <div id="tcp-health-content">
+                        <div class="adv-summary-row" id="tcpHealthSummaryCards"></div>
+                        <div class="card adv-panel full-width" id="tcpHealthFocusPanel">
+                            <h3 id="tcpHealthFocusTitle">🔎 Focus métrique TCP</h3>
+                            <div id="tcpHealthFocusBody" class="adv-table-container"></div>
+                            <div id="tcpHealthFocusChart" style="height: 300px; margin-top: 0.75rem;"></div>
+                        </div>
+                        <div class="card adv-panel full-width" id="tcpHealthAiPanel">
+                            <div class="adv-ai-head">
+                                <h3>🤖 Analyse IA des Flux TCP</h3>
+                                <div class="adv-ai-actions">
+                                    <button class="btn btn-small btn-ai" id="tcpHealthAiAnalyzeBtn">Analyser TCP Health</button>
+                                </div>
+                            </div>
+                            <div id="tcpHealthAiStatus" class="adv-ai-status">Prêt pour analyse IA avancée (congestion, ralentissements, équipement suspect).</div>
+                            <div id="tcpHealthAiResult" class="adv-ai-result">
+                                <div class="adv-empty"><span>🤖</span><p>Lancez l'analyse IA pour obtenir un diagnostic root-cause orienté réseau.</p></div>
+                            </div>
+                        </div>
+                        <div class="adv-panels-grid">
+                            <div class="card adv-panel full-width">
+                                <h3>🧠 Causes Probables & Recommandations</h3>
+                                <div id="tcpHealthDiagnosis" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🌐 Top IPs Problématiques</h3>
+                                <div id="tcpHealthProblemIps" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>⚡ Bursts de Trafic</h3>
+                                <div id="tcpHealthBursts" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>🔄 Sessions les plus retransmises</h3>
+                                <div id="tcpHealthRetransSessions" class="adv-table-container"></div>
+                            </div>
+                            <div class="card adv-panel">
+                                <h3>📏 Window Size & RTT</h3>
+                                <div id="tcpHealthWindowStats" class="adv-table-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== TAB: IR PLAYBOOK ========== -->
+                <div class="tab-content" id="tab-playbook">
+                    <div class="section-header">
+                        <div>
+                            <h2>📋 IR Playbook Interactif</h2>
+                            <p>Playbooks de réponse à incident personnalisés basés sur les menaces détectées</p>
+                        </div>
+                        <div class="playbook-actions">
+                            <button class="btn btn-primary" id="generatePlaybookBtn"
+                                onclick="analyzer.generatePlaybook()">
+                                🚀 Générer les Playbooks
+                            </button>
+                        </div>
+                    </div>
+                    <div class="adv-loading" id="playbook-loading" style="display:none">
+                        <div class="spinner"></div><span>Génération des playbooks IR...</span>
+                    </div>
+                    <div id="playbook-content"></div>
+                </div>
+
+                <!-- ========== (End of advanced tab panels) ========== -->
+
+                <!-- New Analysis Button -->
+                <div class="new-analysis">
+                    <button class="btn btn-secondary" id="newAnalysisBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Nouvelle Analyse
+                    </button>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section class="history-section">
+                <div class="card">
+                    <div class="history-header">
+                        <h3>Historique des Analyses</h3>
+                        <button class="btn btn-small" id="refreshHistory">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10" />
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                            </svg>
+                            Rafraîchir
+                        </button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Fichier</th>
+                                    <th>Date</th>
+                                    <th>Paquets</th>
+                                    <th>Anomalies</th>
+                                    <th>Risque</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <p class="empty-state" id="historyEmpty">Aucune analyse dans l'historique</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Detail Modal -->
+        <div class="modal" id="detailModal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Détails</h2>
+                    <button class="modal-close" id="modalClose" onclick="analyzer.closeModal()">×</button>
+                </div>
+                <div class="modal-body" id="modalBody"></div>
+            </div>
+        </div>
+
+        <!-- Chatbot Button -->
+        <button class="chatbot-button" id="chatbotBtn" onclick="analyzer.toggleChatbot()" title="Assistant IA">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+        </button>
+
+        <!-- Chatbot Panel -->
+        <div class="chatbot-panel" id="chatbotPanel">
+            <div class="chatbot-header">
+                <h3>🤖 Assistant PCAP IA</h3>
+                <button class="chatbot-close" onclick="analyzer.toggleChatbot()">✕</button>
+            </div>
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="chat-message ai">
+                    <div class="chat-avatar">🤖</div>
+                    <div class="chat-bubble">
+                        Bonjour ! Je suis votre assistant IA pour l'analyse PCAP. Posez-moi vos questions sur la capture
+                        réseau en cours. 📊
+                    </div>
+                </div>
+            </div>
+            <div class="chat-suggestions" id="chatSuggestions">
+                <button class="suggestion-chip"
+                    onclick="analyzer.sendChatMessage('Quelles sont les principales anomalies détectées ?')">Anomalies
+                    principales</button>
+                <button class="suggestion-chip" onclick="analyzer.sendChatMessage('Y a-t-il des IPs suspectes ?')">IPs
+                    suspectes</button>
+                <button class="suggestion-chip" onclick="analyzer.sendChatMessage('Résumé du trafic DNS')">Résumé
+                    DNS</button>
+                <button class="suggestion-chip"
+                    onclick="analyzer.sendChatMessage('Problèmes de performance ?')">Performance</button>
+            </div>
+            <div class="chatbot-input">
+                <input type="text" id="chatInput" placeholder="Posez votre question..."
+                    onkeypress="if(event.key==='Enter') analyzer.sendChatMessage()">
+                <button class="chatbot-send" onclick="analyzer.sendChatMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2025 {{ app_name }} - Analyse PCAP pour SOC et Ingénierie Réseau</p>
+                <div class="footer-badges">
+                    <span class="footer-badge">🐳 Docker</span>
+                    <span class="footer-badge">🤖 Ollama</span>
+                    <span class="footer-badge">⚡ FastAPI</span>
+                    <span class="footer-badge">🧠 Multi-Agent IA</span>
+                </div>
+            </div>
+        </footer>
+        <!-- Scripts -->
+        <!-- ECharts (pour QoS) -->
+        <!-- ECharts est déjà chargé (defer) dans <head>: pas de second bundle -->
+        <script defer src="/static/js/runtime-config.js"></script>
+        <script defer src="/static/js/connection.js?v={{ assets_version.connection_js }}"></script>
+        <script defer src="/static/js/advanced_features.js?v={{ assets_version.advanced_features_js }}"></script>
+        <script defer src="/static/js/app.js?v={{ assets_version.app_js }}"></script>
+</body>
+
+</html>

@@ -1,0 +1,101 @@
+# Run from the repository: docker compose --env-file deploy/.env -f deploy/compose.yml up -d --build
+name: pcap-public
+
+x-backend-env: &backend-env
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+  UPLOAD_DIR: /app/uploads
+  RESULTS_DIR: /app/results
+  API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:?Set a random API_ACCESS_TOKEN of at least 32 characters}
+  CORS_ORIGINS: ${CORS_ORIGINS:?Set the exact frontend origin as a JSON array}
+  DEBUG: "false"
+  WORKERS: "2"
+  MAX_FILE_SIZE: "3221225472"
+  OLLAMA_BASE_URL: http://127.0.0.1:11434
+
+services:
+  fastapi:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+      - results:/app/results
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery_worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=1 -Q pcap_analysis
+    environment: *backend-env
+    volumes:
+      - uploads:/app/uploads
+      - results:/app/results
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mcp:
+    build:
+      context: ..
+      dockerfile: mcp_gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:?Set API_ACCESS_TOKEN}
+      MCP_BACKEND_URL: http://fastapi:8000
+      MCP_PUBLIC_URL: https://${PCAP_DOMAIN:?Set PCAP_DOMAIN}/mcp
+      MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER:?Set the exact OAuth issuer}
+      MCP_OAUTH_AUDIENCE: ${MCP_OAUTH_AUDIENCE:?Set the OAuth audience}
+      MCP_OAUTH_JWKS_URL: ${MCP_OAUTH_JWKS_URL:?Set the HTTPS JWKS endpoint}
+      MCP_ALLOWED_SUBJECTS: ${MCP_ALLOWED_SUBJECTS:?Set the owner OAuth subject}
+    depends_on:
+      fastapi:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PCAP_DOMAIN: ${PCAP_DOMAIN:?Set PCAP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - fastapi
+      - mcp
+
+volumes:
+  uploads:
+  results:
+  redis:
+  caddy_data:
+  caddy_config:
