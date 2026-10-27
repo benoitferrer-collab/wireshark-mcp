@@ -22,6 +22,13 @@ async def test_owner_token_accepted_and_identity_retained():
     assert result.scopes == ['pcap:read']
 
 @pytest.mark.asyncio
+async def test_generic_oidc_retains_other_granted_scopes():
+    verifier = OAuthTokenVerifier(settings(), signing_key=KEY.public_key())
+    result = await verifier.verify_token(make_token(scope='openid pcap:read'))
+    assert result is not None
+    assert result.scopes == ['openid', 'pcap:read']
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('claims', [
     {'exp': 1}, {'aud': 'other'}, {'iss': 'https://evil.example/'},
     {'sub': 'other-user'}, {'scope': 'other'}, {'sub': ''},

@@ -101,6 +101,11 @@ secrets de production au projet.
 
 ## Terminer la connexion Claude / ChatGPT
 
+Pour Microsoft Entra ID (Azure AD), suivre le [guide Entra MCP](ENTRA_MCP.md).
+Ce mode valide les jetons v2 du tenant configuré, les identifiants utilisateur
+`oid` autorisés et la permission déléguée `scp`. Il utilise les variables
+supplémentaires `MCP_OAUTH_PROVIDER=entra` et `MCP_ENTRA_TENANT_ID`.
+
 Choisir un fournisseur OAuth/OIDC géré. Le serveur MCP valide des jetons ; il
 ne fournit pas lui-même la page de connexion. Le fournisseur doit publier ses
 métadonnées et son JWKS, gérer Authorization Code + PKCE S256 et les refresh

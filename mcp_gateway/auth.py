@@ -21,13 +21,21 @@ class OAuthTokenVerifier:
                 issuer=self.settings.issuer,
                 options={'require': ['exp', 'iat', 'sub', 'iss', 'aud']},
             )
-            scopes = str(claims.get('scope', '')).split()
-            if claims['sub'] not in self.settings.allowed_subjects or 'pcap:read' not in scopes:
+            entra = self.settings.oauth_provider == 'entra'
+            if entra and (claims.get('tid') != self.settings.tenant_id or claims.get('ver') != '2.0'):
+                return None
+            subject = claims.get('oid') if entra else claims['sub']
+            scope_claim = claims.get('scp' if entra else 'scope', '')
+            if not isinstance(scope_claim, str):
+                return None
+            scopes = scope_claim.split()
+            if subject not in self.settings.allowed_subjects or 'pcap:read' not in scopes:
                 return None
             return AccessToken(
                 token=token, client_id=claims.get('client_id') or claims.get('azp') or claims['sub'],
-                scopes=scopes, expires_at=claims['exp'], resource=self.settings.public_url,
-                subject=claims['sub'],
+                scopes=[self.settings.required_scope] if entra else scopes,
+                expires_at=claims['exp'], resource=self.settings.public_url,
+                subject=subject,
             )
         except (jwt.PyJWTError, ValueError, TypeError, KeyError):
             return None

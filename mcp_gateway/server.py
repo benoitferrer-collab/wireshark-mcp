@@ -39,7 +39,7 @@ def create_server(settings, backend=None, verifier=None):
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(settings.issuer),
             resource_server_url=AnyHttpUrl(settings.public_url),
-            required_scopes=['pcap:read'], validate_token_resource=True,
+            required_scopes=[settings.required_scope], validate_token_resource=True,
         ),
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
