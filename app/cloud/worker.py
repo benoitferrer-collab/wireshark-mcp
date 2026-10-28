@@ -29,26 +29,35 @@ def handle_delivery(task_id, delivery_count, objects, runner=subprocess.run):
     return False
 
 
+POLL_WAIT_SECONDS=15
+
 async def poll_cycle(queue,objects):
     for topic in ('pcap-analysis','pcap-tls-decryption'):
+        iterator=None
         try:
-            async for delivery in queue.poll(topic,'pcap-worker',limit=1,lease_duration=300):
-                async with delivery as message:
-                    payload=message.payload
-                    task_id=payload['task_id']
-                    print('Worker received '+topic,flush=True)
-                    if payload.get('kind')=='tls':
-                        from app.tls.worker import handle_tls_delivery
-                        done=await asyncio.to_thread(handle_tls_delivery,task_id,message.metadata.delivery_count,objects)
-                    else:
-                        done=await asyncio.to_thread(handle_delivery,task_id,message.metadata.delivery_count,objects)
-                    if not done:
-                        from vercel.queue import RetryAfter
-                        raise RetryAfter(30)
-                    print('Worker completed '+topic,flush=True)
+            iterator=queue.poll(topic,'pcap-worker',limit=1,lease_duration=300)
+            # Bound only the receive, never the analysis/decoder running afterward.
+            async with asyncio.timeout(POLL_WAIT_SECONDS):
+                delivery=await anext(iterator,None)
+            if delivery is None:continue
+            async with delivery as message:
+                payload=message.payload
+                task_id=payload['task_id']
+                print('Worker received '+topic,flush=True)
+                if payload.get('kind')=='tls':
+                    from app.tls.worker import handle_tls_delivery
+                    done=await asyncio.to_thread(handle_tls_delivery,task_id,message.metadata.delivery_count,objects)
+                else:
+                    done=await asyncio.to_thread(handle_delivery,task_id,message.metadata.delivery_count,objects)
+                if not done:
+                    from vercel.queue import RetryAfter
+                    raise RetryAfter(30)
+                print('Worker completed '+topic,flush=True)
         except Exception as exc:
-            # Static topic and exception class only: no credentials or captured data.
             print('Queue retry '+topic+': '+type(exc).__name__,flush=True)
+        finally:
+            if iterator is not None:await iterator.aclose()
+
 
 
 async def main():
