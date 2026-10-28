@@ -29,27 +29,46 @@ def handle_delivery(task_id, delivery_count, objects, runner=subprocess.run):
     return False
 
 
-async def main():
-    from vercel.queue import QueueClient, ALL_DEPLOYMENTS
-    queue = QueueClient(region=os.getenv('PCAP_QUEUE_REGION', 'iad1'), deployment=ALL_DEPLOYMENTS)
-    objects = BlobObjects()
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT): loop.add_signal_handler(sig, stop.set)
-    while not stop.is_set():
-        try:
-            async for delivery in queue.poll('pcap-analysis', 'pcap-worker', limit=1, lease_duration=300):
-                async with delivery as message:
-                    payload = message.payload
-                    task_id = payload['task_id']
-                    done = await asyncio.to_thread(handle_delivery, task_id, message.metadata.delivery_count, objects)
-                    if not done:
-                        from vercel.queue import RetryAfter
-                        raise RetryAfter(30)
-        except Exception as exc:
-            # Never log tokens, capture contents or request headers.
-            print(f'Queue retry: {type(exc).__name__}', flush=True)
-        try: await asyncio.wait_for(stop.wait(), timeout=5)
-        except TimeoutError: pass
+POLL_WAIT_SECONDS=15
 
-if __name__ == '__main__': asyncio.run(main())
+async def poll_cycle(queue,objects):
+    for topic in ('pcap-analysis','pcap-tls-decryption'):
+        iterator=None
+        try:
+            iterator=queue.poll(topic,'pcap-worker',limit=1,lease_duration=300)
+            # Bound only the receive, never the analysis/decoder running afterward.
+            async with asyncio.timeout(POLL_WAIT_SECONDS):
+                delivery=await anext(iterator,None)
+            if delivery is None:continue
+            async with delivery as message:
+                payload=message.payload
+                task_id=payload['task_id']
+                print('Worker received '+topic,flush=True)
+                if payload.get('kind')=='tls':
+                    from app.tls.worker import handle_tls_delivery
+                    done=await asyncio.to_thread(handle_tls_delivery,task_id,message.metadata.delivery_count,objects)
+                else:
+                    done=await asyncio.to_thread(handle_delivery,task_id,message.metadata.delivery_count,objects)
+                if not done:
+                    from vercel.queue import RetryAfter
+                    raise RetryAfter(30)
+                print('Worker completed '+topic,flush=True)
+        except Exception as exc:
+            print('Queue retry '+topic+': '+type(exc).__name__,flush=True)
+        finally:
+            if iterator is not None:await iterator.aclose()
+
+
+
+async def main():
+    from vercel.queue import QueueClient,ALL_DEPLOYMENTS
+    queue=QueueClient(region=os.getenv('PCAP_QUEUE_REGION','iad1'),deployment=ALL_DEPLOYMENTS)
+    objects=BlobObjects();stop=asyncio.Event();loop=asyncio.get_running_loop()
+    for sig in (signal.SIGTERM,signal.SIGINT):loop.add_signal_handler(sig,stop.set)
+    print('Worker ready: PCAP and TLS',flush=True)
+    while not stop.is_set():
+        await poll_cycle(queue,objects)
+        try:await asyncio.wait_for(stop.wait(),timeout=5)
+        except TimeoutError:pass
+
+if __name__=='__main__':asyncio.run(main())

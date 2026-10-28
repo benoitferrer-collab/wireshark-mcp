@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark" data-ui-style="default">
+<html lang="fr" data-theme="light" data-ui-style="default">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ app_name }} - Analyse PCAP Professionnelle</title>
+    <title>Nomios PcapAnalyzer — Espace d’analyse</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ assets_version.style_css }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -248,9 +248,17 @@
             color: var(--accent);
         }
     </style>
+<link rel="stylesheet" href="/static/css/nomios.css?v={{ assets_version.nomios_css }}">
+<link rel="stylesheet" href="/static/css/tls-decryption.css?v={{ assets_version.tls_css }}">
 </head>
 
 <body>
+<aside class="nomios-sidebar" aria-label="Navigation principale">
+<a class="nomios-brand" href="/"><img src="/static/img/nomios.png" alt="Logo Nomios"><span><strong>Nomios<span class="brand-point">.</span></strong><small>PcapAnalyzer</small></span></a>
+<div class="nomios-workspace"><span>NL</span><strong>Nomios Lab</strong><small>Espace partagé</small></div>
+<nav class="nomios-home-nav"><button type="button" data-nomios-view="captures" class="selected"><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5"/></svg>Captures</button></nav><span id="tabsActivePill" hidden aria-hidden="true"></span><div class="nomios-module-nav tabs" aria-label="Navigation d’analyse"><p class="nav-label">EXPLORER</p><button class="tab active" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg><span>Vue globale</span></button><button class="tab" data-tab="packets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4h18v14H3z M8 22h8 M12 18v4"/></svg><span>Paquets</span></button><button class="tab" data-tab="streams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12h4l3-8 6 16 3-8h4"/></svg><span>Flux réseau</span></button><button class="tab" data-tab="timeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 7v5l4 2"/><circle cx="12" cy="12" r="9"/></svg><span>Timeline</span></button><details class="nomios-nav-group"><summary>Protocoles</summary><div><button class="tab" data-tab="dns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 12h18 M12 3a16 16 0 0 1 0 18 M12 3a16 16 0 0 0 0 18"/><circle cx="12" cy="12" r="9"/></svg><span>DNS</span></button><button class="tab" data-tab="http"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 12h8 M12 8l4 4-4 4"/></svg><span>HTTP / HTTPS</span></button><button class="tab tab-advanced" data-tab="tls-audit" title="TLS Security Audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>Audit TLS</span></button></div></details><details class="nomios-nav-group"><summary>Diagnostics</summary><div><button class="tab tab-advanced" data-tab="tcp-health" title="Diagnostic Performance TCP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12h5l3-7 4 14 3-7h5"/></svg><span>Santé TCP</span></button><button class="tab tab-advanced" data-tab="qos" title="QoS & Performance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20V12 M10 20V4 M16 20V8 M22 20V2"/></svg><span>QoS</span></button><button class="tab tab-advanced" data-tab="threat-intel" title="Threat Intelligence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l9 4v6c0 4-9 8-9 8s-9-4-9-8V7z"/></svg><span>Threat Intel</span></button><button class="tab tab-advanced" data-tab="flow-behavior" title="Flow Behavior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17L9 11l4 3 8-10 M16 4h5v5"/></svg><span>C2 / Exfiltration</span></button><button class="tab tab-advanced" data-tab="lateral-movement" title="Mouvement Latéral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h6v6H3z M15 12h6v6h-6z M9 9h9v3"/></svg><span>Mouvements latéraux</span></button></div></details><details class="nomios-nav-group"><summary>Collaboration</summary><div><button class="tab" data-tab="multi-pcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4h7v7H3z M14 4h7v7h-7z M8 15h8v6H8z"/></svg><span>Multi-PCAP</span></button><button class="tab tab-team" data-tab="team-ia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v18 M3 12h18 M5 5l14 14 M5 19L19 5"/></svg><span>Team IA</span></button><button class="tab tab-advanced" data-tab="playbook" title="IR Playbook & DFIR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5"/></svg><span>IR Playbook</span></button></div></details></div><nav class="nomios-sidebar-bottom"><button type="button" data-nomios-view="assistants"><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></svg> Assistants IA</button><button type="button" data-nomios-view="admin" id="nomiosAdminNav" hidden><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2"/></svg> Administration</button></nav>
+<div class="nomios-user"><span class="nomios-avatar">N</span><div><strong id="nomiosUserName">Espace d’analyse</strong><small id="nomiosUserStatus">Connexion au serveur</small></div><button type="button" id="nomiosLogout" hidden title="Se déconnecter">↪</button></div>
+</aside>
     <!-- Particle Background -->
     <canvas id="particleCanvas" class="particle-canvas"></canvas>
     <div class="app-container">
@@ -261,14 +269,9 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5" />
-                        <path d="M2 12l10 5 10-5" />
-                    </svg>
-                    <h1>{{ app_name }}</h1>
+<span class="nomios-header-label">Espace d’analyse</span><span class="nomios-header-separator">/</span><h1>Nomios PcapAnalyzer</h1>
                 </div>
-                <div class="header-info">
+                <details class="nomios-preferences"><summary>Préférences <span aria-hidden="true">⌄</span></summary><div class="header-info">
                     <span class="version">v{{ version }}</span>
                     <span class="status-indicator online">● API Online</span>
 
@@ -302,7 +305,7 @@
                         <span class="focus-mode-icon">🎯</span>
                         <span class="focus-mode-label">Focus</span>
                     </button>
-                </div>
+                </div></details>
             </div>
         </header>
 
@@ -325,18 +328,28 @@
 
         <!-- Main Content -->
         <main class="main-content">
+<section id="nomiosAssistants" class="nomios-page" hidden aria-labelledby="nomiosAssistantsTitle">
+<div class="nomios-page-heading"><div><p class="nav-label">ASSISTANTS IA</p><h2 id="nomiosAssistantsTitle">Votre expertise, augmentée.</h2><p>Consultez l’activité réelle des assistants qui explorent vos analyses.</p></div><button class="btn btn-primary" id="nomiosRefreshActivity">Actualiser</button></div>
+<div class="nomios-info"><span>↗</span><div><strong>Passerelle MCP</strong><code id="nomiosMcpEndpoint"></code><small>Lecture des analyses · authentification Microsoft Entra ID</small></div></div>
+<p id="nomiosActivityMessage" role="status">Chargement de l’activité…</p><div id="nomiosAssistantCards" class="nomios-assistant-grid"></div>
+<div class="card nomios-events"><h3>Derniers appels d’outils</h3><p>Un appel d’outil MCP est une requête. Les messages dans Claude et les initialisations ne sont pas comptabilisés. Horaires UTC.</p><div class="table-wrapper"><table><thead><tr><th>Date UTC</th><th>Assistant</th><th>Outil</th><th>Résultat</th><th>Durée</th></tr></thead><tbody id="nomiosActivityRows"></tbody></table></div></div>
+<p class="nomios-footnote">L’activité récente correspond à un appel reçu dans les 15 dernières minutes ; elle ne garantit pas qu’une session distante reste ouverte. Historique conservé 30 jours, sans contenu de capture ni conversation.</p>
+</section>
+<section id="nomiosAdmin" class="nomios-page" hidden aria-labelledby="nomiosAdminTitle"><div class="nomios-page-heading"><div><p class="nav-label">ADMINISTRATION</p><h2 id="nomiosAdminTitle">Un accès maîtrisé.</h2><p>Réservez l’espace d’analyse à votre groupe Microsoft Entra ID.</p></div></div>
+<div class="card nomios-admin-card"><h3>Accès Microsoft Entra ID</h3><label>Tenant<input id="nomiosTenant" readonly></label><form id="nomiosGroupForm"><label>Object ID du groupe autorisé<input id="nomiosGroupId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off"></label><p>Les membres du groupe partagent les captures et analyses de cet espace. Un champ vide réserve l’accès à l’administrateur.</p><button class="btn btn-primary" type="submit">Enregistrer le groupe</button><p id="nomiosGroupMessage" role="status"></p></form></div></section>
             <!-- Upload Section -->
             <section class="upload-section" id="uploadSection">
                 <div class="premium-intro">
-                    <p class="premium-intro-kicker">Network Forensics Suite</p>
-                    <h2 class="premium-intro-title">Détectez, priorisez, investiguez le trafic en profondeur.</h2>
-                    <p class="premium-intro-subtitle">Pipeline SOC prêt à l'emploi: upload, corrélation protocolaire, IA et exports DFIR.</p>
+                    <p class="premium-intro-kicker">NOMIOS PCAPANALYZER</p>
+                    <h2 class="premium-intro-title">Votre réseau, en clair.</h2>
+                    <p class="premium-intro-subtitle">Importez vos captures, explorez les preuves et remontez à la source des incidents.</p>
                     <div class="premium-intro-badges">
                         <span>TCP Deep Analysis</span>
                         <span>Threat Intel</span>
                         <span>AI Copilot</span>
                     </div>
                 </div>
+                <div class="nomios-upload-layout"><div>
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -351,9 +364,10 @@
                     <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap" hidden>
                 </div>
                 <div class="upload-alt-actions" style="margin-top: 0.75rem; display:flex; justify-content:center;">
-                    <button class="btn btn-secondary" id="openMultiPcapMode">🧩 Ouvrir le mode Multi-PCAP</button>
+                    <button class="btn btn-secondary" id="openMultiPcapMode">Comparer plusieurs captures</button>
                 </div>
 
+                </div><aside class="nomios-copilot"><div class="copilot-kicker">✧ VOTRE COPILOTE D’INVESTIGATION</div><h3>Des preuves.<br>Des réponses.</h3><p>Explorez vos analyses depuis Claude avec votre passerelle MCP. Les outils vous aident à relier symptômes, sessions et paquets.</p><button type="button" data-nomios-view="assistants">Gérer mes assistants <span aria-hidden="true">→</span></button><small>Consultez les derniers appels et les compteurs dans Assistants IA.</small></aside></div>
                 <!-- Progress -->
                 <div class="progress-container" id="progressContainer" style="display: none;">
                     <div class="progress-header">
@@ -371,8 +385,8 @@
             <section class="results-section" id="resultsSection" style="display: none;">
                 <div class="card premium-hero">
                     <div class="premium-hero-copy">
-                        <p class="premium-hero-kicker">Command Center</p>
-                        <h2>Analyse PCAP en direct</h2>
+                        <p class="premium-hero-kicker">DOSSIER D’INVESTIGATION</p>
+                        <h2>Analyse de capture</h2>
                         <p id="analysisMetaLabel">Résultats consolidés et prêts pour investigation.</p>
                     </div>
                     <div class="premium-hero-signals">
@@ -512,13 +526,14 @@
                     </div>
                 </div>
 
-                <div class="card investigation-hub-card" id="investigationHubCard">
+                <details class="card investigation-hub-card" id="investigationHubCard"><summary class="investigation-fold-heading">Signaux prioritaires & investigation guidée <span>Ouvrir les constats et questions</span></summary>
                     <div class="investigation-hub-header">
                         <div>
                             <h3>🔦 Problem Spotlight</h3>
                             <p class="investigation-hub-subtitle">Mise en surbrillance des symptômes critiques + questions guidées pour accélérer le troubleshooting.</p>
                         </div>
                         <div class="investigation-hub-actions">
+                            <button class="btn btn-small" id="guidedRunBtn">Analyser les questions guidées</button>
                             <button class="btn btn-small" id="guidedRefreshBtn">↻ Régénérer</button>
                             <button class="btn btn-small btn-ai" id="guidedAskTopBtn">🤖 Analyser le top problème</button>
                         </div>
@@ -532,7 +547,7 @@
                     <div class="investigation-ai-preview" id="guidedAiPreview">
                         <div class="investigation-empty">Cliquez sur une question guidée pour demander une piste à l’IA.</div>
                     </div>
-                </div>
+                </details>
 
                 <!-- Export Buttons -->
                 <div class="export-section">
@@ -573,98 +588,11 @@
                 </div>
 
                 <!-- Tab Navigation -->
-                <div class="tabs-container">
-                    <div class="tabs">
-                        <span class="tabs-active-pill" id="tabsActivePill" aria-hidden="true"></span>
-                        <button class="tab active" data-tab="overview">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="3" width="7" height="7" />
-                                <rect x="14" y="3" width="7" height="7" />
-                                <rect x="14" y="14" width="7" height="7" />
-                                <rect x="3" y="14" width="7" height="7" />
-                            </svg>
-                            Vue Globale
-                        </button>
-                        <button class="tab" data-tab="dns">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="2" y1="12" x2="22" y2="12" />
-                            </svg>
-                            DNS
-                        </button>
-                        <button class="tab" data-tab="http">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                            </svg>
-                            HTTP/HTTPS
-                        </button>
-                        <button class="tab tab-team" data-tab="team-ia">
-                            🧠 Team IA
-                        </button>
-                        <button class="tab" data-tab="timeline">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            Timeline
-                        </button>
-                        <button class="tab" data-tab="streams">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                            </svg>
-                            Streams
-                        </button>
-                        <button class="tab" data-tab="multi-pcap">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="4" width="7" height="7" />
-                                <rect x="14" y="4" width="7" height="7" />
-                                <rect x="8.5" y="13" width="7" height="7" />
-                            </svg>
-                            Multi-PCAP
-                        </button>
-                        <button class="tab" data-tab="packets">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                            </svg>
-                            Paquets
-                        </button>
-                        <button class="tab tab-advanced" data-tab="tls-audit" title="TLS Security Audit">
-                            🔐 TLS Audit
-                        </button>
-                        <button class="tab tab-advanced" data-tab="threat-intel" title="Threat Intelligence">
-                            🕵️ Threat Intel
-                        </button>
-                        <button class="tab tab-advanced" data-tab="flow-behavior" title="Flow Behavior">
-                            📡 Flux C2/Exfil
-                        </button>
-                        <button class="tab tab-advanced" data-tab="lateral-movement" title="Mouvement Latéral">
-                            🔀 Lat. Movement
-                        </button>
-                        <button class="tab tab-advanced" data-tab="qos" title="QoS & Performance">
-                            📊 QoS
-                        </button>
-                        <button class="tab tab-advanced" data-tab="tcp-health" title="Diagnostic Performance TCP">
-                            🩺 TCP Health
-                        </button>
-                        <button class="tab tab-advanced" data-tab="playbook" title="IR Playbook & DFIR">
-                            📋 IR Playbook
-                        </button>
-                    </div>
-                </div>
-                <div class="menu-health-center" id="menuHealthCenter" style="display:none;">
-                    <div class="menu-health-header">
-                        <div class="menu-health-title">🩺 Menu Health Center</div>
-                        <div class="menu-health-summary" id="menuHealthSummary">En attente d'analyse...</div>
-                    </div>
+                <div class="nomios-analysis-layout">
+                <details class="menu-health-center" id="menuHealthCenter" style="display:none;">
+                    <summary class="menu-health-header"><span class="menu-health-title">Disponibilité des modules</span><span class="menu-health-summary" id="menuHealthSummary">En attente d’analyse…</span></summary>
                     <div class="menu-health-items" id="menuHealthItems"></div>
-                </div>
+                </details>
 
                 <!-- Tab Content: Overview -->
                 <div class="tab-content active" id="tab-overview">
@@ -1291,7 +1219,7 @@
                 <!-- Tab Content: Streams -->
                 <div class="tab-content" id="tab-streams">
                     <div class="section-header">
-                        <h2>🌊 Streams TCP</h2>
+                        <h2>Flux réseau</h2>
                         <p>Analyse des flux de communication TCP et détection des sessions instables</p>
                     </div>
 
@@ -1323,9 +1251,9 @@
                                 <input type="checkbox" id="streamProblematicOnly">
                                 <span>Seulement flux suspects</span>
                             </label>
-                            <button type="button" class="btn-secondary btn-sm" id="streamRefreshBtn">🔄 Actualiser</button>
+                            <button type="button" class="btn-secondary btn-sm" id="streamRefreshBtn">Actualiser</button>
                             <button type="button" class="btn-secondary btn-sm" id="streamResetBtn">Réinitialiser</button>
-                            <button type="button" class="btn-secondary btn-sm" id="streamExportProblematicBtn">📤 Export CSV flux suspects</button>
+                            <button type="button" class="btn-secondary btn-sm" id="streamExportProblematicBtn">Exporter les flux suspects</button>
                             <div class="stream-page-controls">
                                 <button type="button" class="btn-secondary btn-sm" id="streamPrevBtn">← Précédent</button>
                                 <span id="streamPageInfo">Page 1</span>
@@ -1352,25 +1280,10 @@
                             </div>
                         </div>
 
-                        <h3>Liste des Streams <span class="stream-subtitle" id="streamsTotalLabel"></span></h3>
+                        <h3>Conversations TCP <span class="stream-subtitle" id="streamsTotalLabel"></span></h3>
                         <div class="table-wrapper">
                             <table id="streamsTable">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Source</th>
-                                        <th>Destination</th>
-                                        <th>Paquets</th>
-                                        <th>Volume</th>
-                                        <th>Type</th>
-                                        <th>État</th>
-                                        <th>Retrans.</th>
-                                        <th>RST</th>
-                                        <th>Risque</th>
-                                        <th>Cause probable</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
+                                <thead><tr><th>Flux</th><th>Source / destination</th><th>Trafic</th><th>Connexion</th><th title="Retransmissions">Retrans.</th><th>RST</th><th>Risque</th><th>Diagnostic probable</th><th>Actions</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
@@ -1997,6 +1910,7 @@
 
                 <!-- ========== (End of advanced tab panels) ========== -->
 
+                </div><!-- nomios-analysis-layout -->
                 <!-- New Analysis Button -->
                 <div class="new-analysis">
                     <button class="btn btn-secondary" id="newAnalysisBtn">
@@ -2102,7 +2016,7 @@
         <!-- Footer -->
         <footer class="footer">
             <div class="footer-content">
-                <p>&copy; 2025 {{ app_name }} - Analyse PCAP pour SOC et Ingénierie Réseau</p>
+                <p>Nomios PcapAnalyzer · Vos captures. Vos preuves. Votre analyse.</p>
                 <div class="footer-badges">
                     <span class="footer-badge">🐳 Docker</span>
                     <span class="footer-badge">🤖 Ollama</span>
@@ -2118,6 +2032,8 @@
         <script defer src="/static/js/connection.js?v={{ assets_version.connection_js }}"></script>
         <script defer src="/static/js/advanced_features.js?v={{ assets_version.advanced_features_js }}"></script>
         <script defer src="/static/js/app.js?v={{ assets_version.app_js }}"></script>
+        <script defer src="/static/js/identity-ui.js?v={{ assets_version.identity_ui_js }}"></script>
+<script defer src="/static/js/tls-decryption.js?v={{ assets_version.tls_js }}"></script>
 </body>
 
 </html>

@@ -88,6 +88,7 @@ def create_cloud_storage(base_class, objects=None, root=None):
         def delete_analysis(self, task_id):
             valid_id(task_id)
             self.objects.write_json(f'deleted/{task_id}.json', {'deleted': True})
+            if getattr(self, 'tls_jobs', None): self.tls_jobs.delete_capture(task_id)
             keys = self.objects.keys(f'captures/{task_id}/') + self.objects.keys(f'results/{task_id}/')
             keys += [f'summaries/{task_id}.json', f'multi-summaries/{task_id}.json', f'jobs/{task_id}.json', f'status/{task_id}.json']
             self.objects.delete(keys)
