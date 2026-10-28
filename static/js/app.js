@@ -2047,6 +2047,7 @@ Réponds STRICTEMENT en JSON:
     // ==================== FILE UPLOAD ====================
 
     async uploadFile(file) {
+        document.dispatchEvent(new CustomEvent('pcap:upload-start'));
         document.getElementById('uploadArea').style.display = 'none';
         document.getElementById('progressContainer').style.display = 'block';
         document.getElementById('progressFileName').textContent = file.name;
@@ -2071,6 +2072,7 @@ Réponds STRICTEMENT en JSON:
 
             const data = await response.json();
             this.currentTaskId = data.task_id;
+            document.dispatchEvent(new CustomEvent('pcap:upload-queued', {detail:{taskId:data.task_id}}));
             this.renderSignatures = { dns: '', http: '' };
             this.streamsLoadedKey = '';
             this.packetsLoadedTaskId = '';
@@ -2086,6 +2088,7 @@ Réponds STRICTEMENT en JSON:
             this.startStatusPolling();
 
         } catch (error) {
+            document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
             console.error('Upload error:', error);
             this.showToast('error', 'Erreur Upload', error.message);
             this.showError(error.message);
@@ -2117,6 +2120,7 @@ Réponds STRICTEMENT en JSON:
                     this.showToast('success', 'Analyse terminée', 'Les résultats sont prêts !');
                     this.loadResults();
                 } else if (data.status === 'failed') {
+                    document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
                     this.showToast('error', 'Erreur', data.message || 'Erreur lors de l\'analyse');

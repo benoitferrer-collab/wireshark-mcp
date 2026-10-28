@@ -148,6 +148,16 @@ def create_server(settings, backend=None, verifier=None):
         return await evidence(f'/api/analysis/{task_id}/session/{quote(session_id, safe="")}', task_id=task_id)
 
     @server.tool(annotations=READ_ONLY)
+    async def get_tls_decryption(task_id: str, offset: PageOffset = 0, limit: PageLimit = 20) -> dict:
+        """Read existing decrypted TLS metadata (HTTP/1 and HTTP/2) with original packet references.
+        Never returns secrets, cookies, authorization or message bodies. Does not submit keys
+        or start decryption; import session secrets through the web application first.
+        Follow report.next_offset. Empty or partial coverage does not establish absence of activity.
+        """
+        task_id = task_path(task_id)
+        return await evidence(f'/api/mcp-data/{task_id}/tls-decryption', {'offset': offset, 'limit': limit}, task_id)
+
+    @server.tool(annotations=READ_ONLY)
     async def get_diagnostic(task_id: str, diagnostic: Literal[
         'tls-audit', 'tls-analysis', 'tcp-health', 'qos-metrics', 'flow-behavior', 'lateral-movement',
     ], pointer: JsonPointer = '', offset: PageOffset = 0, limit: PageLimit = 20) -> dict:

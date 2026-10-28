@@ -42,7 +42,11 @@ async def main():
                 async with delivery as message:
                     payload = message.payload
                     task_id = payload['task_id']
-                    done = await asyncio.to_thread(handle_delivery, task_id, message.metadata.delivery_count, objects)
+                    if payload.get('kind') == 'tls':
+                        from app.tls.worker import handle_tls_delivery
+                        done = await asyncio.to_thread(handle_tls_delivery, task_id, message.metadata.delivery_count, objects)
+                    else:
+                        done = await asyncio.to_thread(handle_delivery, task_id, message.metadata.delivery_count, objects)
                     if not done:
                         from vercel.queue import RetryAfter
                         raise RetryAfter(30)

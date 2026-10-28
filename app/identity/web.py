@@ -149,7 +149,7 @@ class EventInput(BaseModel):
     duration_ms:int=Field(ge=0,le=86400000)
 
 
-def create_identity_router(settings, store, provider):
+def create_identity_router(settings, store, provider, maintenance_hook=None):
     router=APIRouter()
     def identity(request):
         session=getattr(request.state,'identity',None)
@@ -246,6 +246,7 @@ def create_identity_router(settings, store, provider):
     @router.get('/api/identity/maintenance')
     def maintenance():
         store.prune()
+        if maintenance_hook: maintenance_hook()
         return {'ok':True}
 
     @router.post('/api/identity/internal/activity-probe')

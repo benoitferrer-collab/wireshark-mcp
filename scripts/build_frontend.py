@@ -25,6 +25,7 @@ def build(output: Path):
     shutil.copytree(ROOT / 'static', output / 'static', dirs_exist_ok=True)
     replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3'}
     for name, filename in {
+        'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
         'nomios_css': 'css/nomios.css', 'identity_ui_js': 'js/identity-ui.js',
         'style_css': 'css/style.css', 'app_js': 'js/app.js',
         'advanced_features_js': 'js/advanced_features.js', 'connection_js': 'js/connection.js',

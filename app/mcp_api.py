@@ -6,7 +6,7 @@ from app.mcp_views import analysis_summary, query_view
 from mcp_gateway.policy import page_value
 
 
-def create_mcp_router(storage):
+def create_mcp_router(storage, tls_service=None):
     router = APIRouter(prefix='/api/mcp-data', tags=['MCP evidence'])
 
     def load(task_id, kind):
@@ -39,9 +39,20 @@ def create_mcp_router(storage):
         return {'kind': kind, 'analyses': entries[offset:offset + limit],
                 'next_offset': offset + limit if len(entries) > offset + limit else None}
 
+    @router.get('/{task_id}/tls-decryption')
+    def tls_report(task_id: str, offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=25)):
+        if tls_service is None: raise HTTPException(503, 'TLS decryption unavailable')
+        from app.tls.routes import public_view
+        try: return public_view(tls_service, task_id, offset, limit)
+        except ValueError: raise HTTPException(400, 'Invalid task or pagination') from None
+
     @router.get('/{task_id}/summary')
     def summary(task_id: str):
-        return analysis_summary(task_id, load(task_id, 'single'))
+        result = analysis_summary(task_id, load(task_id, 'single'))
+        if tls_service:
+            job = tls_service.current(task_id)
+            result['tls_decryption'] = {'status': job['status'] if job else 'not_requested', 'tool': 'get_tls_decryption'}
+        return result
 
     @router.get('/{task_id}/anomalies')
     def anomalies(task_id: str, severity: str | None = None, source: str | None = None,

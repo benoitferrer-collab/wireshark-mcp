@@ -96,7 +96,7 @@ class CachedStaticFiles(StaticFiles):
 @app.get('/static/js/runtime-config.js', include_in_schema=False)
 async def runtime_config():
     import json
-    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE and not WEB_IDENTITY, 'webAuth': bool(WEB_IDENTITY)}
+    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE and not WEB_IDENTITY, 'webAuth': bool(WEB_IDENTITY), 'tlsDecryption': bool(TLS_SERVICE)}
     return Response('window.PCAP_CONFIG = ' + json.dumps(config) + ';',
                     media_type='application/javascript', headers={'Cache-Control': 'no-store'})
 
@@ -104,12 +104,19 @@ async def runtime_config():
 # Identity is opt-in, with mandatory complete configuration when enabled.
 from app.identity.settings import WebSettings
 WEB_IDENTITY = WebSettings.from_env()
+TLS_SERVICE = None
 if WEB_IDENTITY:
     from app.identity.store import IdentityStore
     from app.identity.web import EntraProvider, WebIdentityMiddleware, create_identity_router
     identity_store = IdentityStore(WEB_IDENTITY.database_url, WEB_IDENTITY.encryption_key)
+    if CLOUD_MODE and os.getenv('TLS_SECRETS_ENCRYPTION_KEY'):
+        from app.tls.jobs import TLSJobs
+        from app.tls.routes import create_tls_router
+        TLS_SERVICE = TLSJobs(identity_store, storage_service.objects, os.environ['TLS_SECRETS_ENCRYPTION_KEY'])
+        storage_service.tls_jobs = TLS_SERVICE
+        app.include_router(create_tls_router(TLS_SERVICE))
     identity_provider = EntraProvider(WEB_IDENTITY)
-    app.include_router(create_identity_router(WEB_IDENTITY, identity_store, identity_provider))
+    app.include_router(create_identity_router(WEB_IDENTITY, identity_store, identity_provider, maintenance_hook=TLS_SERVICE.prune if TLS_SERVICE else None))
     app.add_middleware(WebIdentityMiddleware, settings=WEB_IDENTITY, store=identity_store, provider=identity_provider)
 
 static_path = Path(__file__).parent.parent / "static"
@@ -132,7 +139,7 @@ if CLOUD_MODE:
 app.include_router(api_router)
 app.include_router(additional_router)
 app.include_router(team_router)
-app.include_router(create_mcp_router(storage_service))
+app.include_router(create_mcp_router(storage_service, tls_service=TLS_SERVICE))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -145,6 +152,8 @@ async def root(request: Request):
         return int(path.stat().st_mtime) if path.exists() else settings.app_version
 
     assets_version = {
+        "tls_js": _asset_version("js", "tls-decryption.js"),
+        "tls_css": _asset_version("css", "tls-decryption.css"),
         "nomios_css": _asset_version("css", "nomios.css"),
         "identity_ui_js": _asset_version("js", "identity-ui.js"),
         "advanced_features_js": _asset_version("js", "advanced_features.js"),
