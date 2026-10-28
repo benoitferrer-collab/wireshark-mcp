@@ -1,5 +1,6 @@
 """Single-tenant Entra browser sessions and owner-only access administration."""
 import hmac
+import hashlib
 import os
 import logging
 import secrets
@@ -39,7 +40,9 @@ class EntraProvider:
         raw=result.get('id_token')
         if not raw or not result.get('access_token'): raise ValueError('Authentication failed')
         claims=jwt.decode(raw,self.jwks.get_signing_key_from_jwt(raw).key,algorithms=['RS256'],audience=self.settings.client_id,issuer=self.issuer,options={'require':['exp','iat','sub','iss','aud','nonce','tid','oid']})
-        if claims['tid']!=self.settings.tenant_id or not hmac.compare_digest(claims['nonce'],flow['nonce']): raise ValueError('Invalid identity')
+        # MSAL sends the SHA-256 hex digest, while retaining the original nonce in the flow.
+        expected_nonce=hashlib.sha256(flow['nonce'].encode('ascii')).hexdigest()
+        if claims['tid']!=self.settings.tenant_id or not hmac.compare_digest(claims['nonce'],expected_nonce): raise ValueError('Invalid identity')
         return {'oid':str(UUID(claims['oid'])),'name':str(claims.get('name') or 'Utilisateur'),'cache':cache.serialize()}
 
     def group_member(self, session, group):
