@@ -109,3 +109,28 @@ def test_worker_preserves_secret_for_retry_and_cleans_terminal_failure(env):
     assert handle_tls_delivery(job['id'],3,objects,runner,service)
     assert not objects.keys('tls-secrets/')
     assert service.get(job['id'])['status']=='failed'
+
+def test_timeout_removes_parent_owned_plaintext_scratch(env):
+    import subprocess
+    from app.tls.worker import handle_tls_delivery
+    service,objects=env
+    job=service.create('capture','owner','keylog',KEYLOG)
+    seen=[]
+    def slow(args,**kwargs):
+        root=Path(args[-1]);assert root.is_dir()
+        (root/'secret-material').write_bytes(KEYLOG);seen.append(root)
+        raise subprocess.TimeoutExpired(args,240)
+    assert not handle_tls_delivery(job['id'],1,objects,slow,service)
+    assert seen and not seen[0].exists()
+    assert service.material(job['id'])==KEYLOG
+
+def test_timeout_kills_descendant_processes(tmp_path):
+    import subprocess,sys,time
+    from app.tls.worker import run_isolated
+    heartbeat=tmp_path/'heartbeat'
+    grandchild="import time;from pathlib import Path;p=Path("+repr(str(heartbeat))+");\nwhile True:\n with p.open('ab') as f:f.write(b'x')\n time.sleep(.02)"
+    child='import subprocess,sys,time;subprocess.Popen([sys.executable,"-c",'+repr(grandchild)+']);time.sleep(10)'
+    with pytest.raises(subprocess.TimeoutExpired):run_isolated([sys.executable,'-c',child],timeout=.6,check=False)
+    size=heartbeat.stat().st_size
+    time.sleep(.15)
+    assert heartbeat.stat().st_size==size

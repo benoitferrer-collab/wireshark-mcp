@@ -38,18 +38,19 @@ async def main():
     for sig in (signal.SIGTERM, signal.SIGINT): loop.add_signal_handler(sig, stop.set)
     while not stop.is_set():
         try:
-            async for delivery in queue.poll('pcap-analysis', 'pcap-worker', limit=1, lease_duration=300):
-                async with delivery as message:
-                    payload = message.payload
-                    task_id = payload['task_id']
-                    if payload.get('kind') == 'tls':
-                        from app.tls.worker import handle_tls_delivery
-                        done = await asyncio.to_thread(handle_tls_delivery, task_id, message.metadata.delivery_count, objects)
-                    else:
-                        done = await asyncio.to_thread(handle_delivery, task_id, message.metadata.delivery_count, objects)
-                    if not done:
-                        from vercel.queue import RetryAfter
-                        raise RetryAfter(30)
+            for topic in ('pcap-analysis', 'pcap-tls-decryption'):
+                async for delivery in queue.poll(topic, 'pcap-worker', limit=1, lease_duration=300):
+                    async with delivery as message:
+                        payload = message.payload
+                        task_id = payload['task_id']
+                        if payload.get('kind') == 'tls':
+                            from app.tls.worker import handle_tls_delivery
+                            done = await asyncio.to_thread(handle_tls_delivery, task_id, message.metadata.delivery_count, objects)
+                        else:
+                            done = await asyncio.to_thread(handle_delivery, task_id, message.metadata.delivery_count, objects)
+                        if not done:
+                            from vercel.queue import RetryAfter
+                            raise RetryAfter(30)
         except Exception as exc:
             # Never log tokens, capture contents or request headers.
             print(f'Queue retry: {type(exc).__name__}', flush=True)

@@ -36,7 +36,7 @@ def create_tls_router(service,sender=None):
             else:
                 from vercel.queue import QueueClient,ALL_DEPLOYMENTS
                 queue=QueueClient(region=os.getenv('PCAP_QUEUE_REGION','iad1'),deployment=ALL_DEPLOYMENTS)
-                await queue.send('pcap-analysis',{'kind':'tls','task_id':job['id']},idempotency_key='tls-'+job['id'],retention=86400)
+                await queue.send('pcap-tls-decryption',{'kind':'tls','task_id':job['id']},idempotency_key='tls-'+job['id'],retention=86400)
         except Exception:
             await asyncio.to_thread(service.fail,job['id'],'Mise en file indisponible ; réimportez le fichier.')
             raise HTTPException(503,'Mise en file indisponible ; réessayez.') from None
