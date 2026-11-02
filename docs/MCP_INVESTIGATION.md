@@ -4,6 +4,7 @@ Le MCP conserve les outils existants et ajoute neuf outils de lecture. Le moteur
 
 | Outil | Usage |
 |---|---|
+| `guide_investigation` | Accompagner l’ingénieur : preuves du PCAP, une question ciblée, justification et vérifications suivantes |
 | `get_investigation_capabilities` | Vérifier moteur, fichier original, index initial et limites |
 | `search_packets` | Filtres directionnels IP/CIDR, ports, protocole, domaine, temps Unix, flux TCP et filtre Wireshark |
 | `get_conversations` | Conversations classées par octets, paquets, resets ou retransmissions |
@@ -24,6 +25,18 @@ Le MCP conserve les outils existants et ajoute neuf outils de lecture. Le moteur
 - « Trace les volumes par minute avec les valeurs renvoyées par get_traffic_statistics. »
 
 Les prompts MCP `investigate_capture` et `investigate_indicator` fournissent des parcours guidés si le client sait afficher les prompts.
+
+## Accompagnement de l’ingénieur
+
+Demander au modèle : « Accompagne-moi pour expliquer la lenteur de ce service à partir de cette capture. Pose une question utile à la fois et cite les preuves. » Le nouveau prompt `guide_engineer` propose le même parcours aux clients qui affichent les prompts MCP.
+
+`guide_investigation` lit réellement le résumé et jusqu’à trois anomalies stockées. Si le symptôme, le type de problème et une cible typée sont déjà connus, il effectue au plus une recherche bornée dans le fichier original. Il renvoie des observations référencées, `next_question`, son motif, les informations manquantes et `next_checks` avec les arguments des outils proposés.
+
+Le modèle explique un constat, pose la question et attend la réponse avant de choisir la branche suivante. Il transmet à l’appel suivant les informations déjà connues : symptôme, IP/domaine, port, plage horaire Unix UTC, position de capture, comportement attendu et caractère systématique/intermittent. Les champs explicitement inconnus peuvent figurer dans `unavailable_context` pour ne pas être redemandés. Les indices globaux de l’analyse ne sont pas automatiquement liés à la cible recherchée.
+
+Les problèmes couverts sont `connectivity`, `performance`, `dns`, `tls`, `http`, `security` et `unspecified`. `context.mode="report"` supprime les questions lorsque l’utilisateur demande un rapport direct. Une fenêtre d’incident hors capture est signalée avant de dépenser une recherche ; les délais et erreurs de source restent des limites explicites. Les références `tcp_stream` sont utilisées pour revoir tout un flux sans confondre un paquet isolé avec une cause racine.
+
+Aucun historique conversationnel n’est stocké par le serveur : la conversation reste chez le client, qui doit conserver le contexte. Le MCP propose le raisonnement et les questions ; il ne peut pas imposer la conduite de Claude/ChatGPT ni envoyer spontanément des messages. Aucun mot de passe, jeton ou secret TLS ne doit être demandé dans ce dialogue. Les instructions de guidage figurent aussi dans le résultat de l’outil pour les passerelles qui ne retransmettent pas les instructions générales du serveur.
 
 ## Filtres avancés
 

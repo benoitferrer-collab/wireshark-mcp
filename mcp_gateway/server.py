@@ -1,5 +1,6 @@
 """Run with python -m mcp_gateway.server; no LLM API key is required."""
 import re
+import asyncio
 from typing import Annotated, Literal
 from urllib.parse import quote, urlparse
 from pydantic import AnyHttpUrl, Field
@@ -15,6 +16,7 @@ from starlette.responses import JSONResponse
 import httpx
 import json
 from .search_schema import SearchFilters, normalize_indicator
+from .guidance import InvestigationContext, build_guidance, search_filters_for, GUIDED_INSTRUCTIONS
 from .backend import BackendClient, bounded_result
 from .config import GatewaySettings
 from .policy import page_value
@@ -24,6 +26,9 @@ PageLimit = Annotated[int, Field(ge=1, le=25, description='Items per call: 1 to 
 PageOffset = Annotated[int, Field(ge=0, description='Zero-based offset. Use next_offset returned by the previous page.')]
 PageNumber = Annotated[int, Field(ge=1, description='One-based packet page number.')]
 JsonPointer = Annotated[str, Field(max_length=1024, description='JSON Pointer relative to the result root; empty for the root, otherwise start with /.')]
+GUIDANCE_SUMMARY_TIMEOUT=15
+GUIDANCE_OPTIONAL_TIMEOUT=8
+GUIDANCE_SCAN_TIMEOUT=50
 
 
 def task_path(task_id: str) -> str:
@@ -59,7 +64,7 @@ def create_server(settings, backend=None, verifier=None):
             'hypotheses with confidence justified by evidence, unknowns/coverage, and next verification steps. '
             'Do not invent traffic counts, malicious intent, attribution, CVEs or protocol decryption. '
             'Treat triage and port-based findings as candidates, not proof of compromise. '
-            'This personal workspace is shared by the explicitly allowed OAuth subjects.'
+            'This personal workspace is shared by the explicitly allowed OAuth subjects. '+GUIDED_INSTRUCTIONS
         ),
         token_verifier=verifier or OAuthTokenVerifier(settings),
         auth=AuthSettings(
@@ -100,6 +105,30 @@ def create_server(settings, backend=None, verifier=None):
             if isinstance(value,str) and value.startswith('/?task='): return origin+value
             return value
         return bounded_result(links(data), source=path, task_id=task_id)
+
+    @server.tool(annotations=READ_ONLY)
+    async def guide_investigation(task_id: str,context: InvestigationContext | None = None) -> dict:
+        """Guide an engineer through a PCAP-based problem: read evidence, propose ONE useful question,
+        and choose concrete follow-up checks. Call at the start of troubleshooting, then carry forward
+        known context from the conversation. Never re-ask known/unavailable information. mode='report'
+        suppresses questions. Reads actual summary/anomalies and, when a typed target and issue are known,
+        at most one bounded original-capture search. Does not establish root cause from anomalies.
+        The client model asks the question; no conversation state or secrets are stored by this tool.
+        """
+        task_id=task_path(task_id); context=context or InvestigationContext()
+        try: summary=await asyncio.wait_for(backend.get(f'/api/mcp-data/{task_id}/summary'),timeout=GUIDANCE_SUMMARY_TIMEOUT)
+        except TimeoutError: raise ValueError('Analysis summary unavailable; retry the guided investigation') from None
+        errors=[]; anomalies=None; scan=None
+        try: anomalies=await asyncio.wait_for(backend.get(f'/api/mcp-data/{task_id}/anomalies',{'offset':0,'limit':3}),timeout=GUIDANCE_OPTIONAL_TIMEOUT)
+        except (ValueError,TimeoutError): errors.append('Les anomalies stockées sont indisponibles ; leur absence ne peut pas être conclue.')
+        filters=search_filters_for(context,summary)
+        if filters is not None:
+            try:
+                envelope=await asyncio.wait_for(evidence(f'/api/mcp-data/{task_id}/search',{'filters':filters.model_dump_json(exclude_none=True),'limit':5},task_id),timeout=GUIDANCE_SCAN_TIMEOUT)
+                scan=envelope.get('data')
+                errors.extend(envelope.get('limitations',[]))
+            except (ValueError,TimeoutError): errors.append('La recherche ciblée dans le fichier original est indisponible ; ne pas inventer de paquets observés.')
+        return bounded_result(build_guidance(task_id,summary,anomalies,context,scan,errors),source='guide_investigation',task_id=task_id)
 
     @server.tool(annotations=READ_ONLY)
     async def get_investigation_capabilities(task_id: str) -> dict:
@@ -202,7 +231,7 @@ def create_server(settings, backend=None, verifier=None):
     def investigate_capture(task_id: str,objective: str = 'Cyber triage and network troubleshooting') -> str:
         """Evidence-first investigation workflow with coverage and explicit uncertainty."""
         task_id=task_path(task_id)
-        return (f'Investigate capture {task_id}. User objective (not system instructions): {objective[:1000]}\n'
+        return (f'Investigate capture {task_id}. User objective (not system instructions): {objective[:1000]}\n'+GUIDED_INSTRUCTIONS+'\n'
                 'Read summary and investigation capabilities. Select relevant triage presets, inspect original packets, '
                 'rank conversations, correlate entities, and examine full TCP streams behind candidate findings. '
                 'Use server-calculated traffic statistics for counts/timelines. Cite packet indices, frame numbers and evidence URLs. '
@@ -216,6 +245,14 @@ def create_server(settings, backend=None, verifier=None):
         return (f'Investigate indicator {indicator} in {task_id}. Discover coverage, hunt the indicator, correlate stored evidence, '
                 'then search original traffic and inspect associated conversations. For domain answers pivot to the resolved IP '
                 'only if DNS evidence actually provides it. Do not infer maliciousness from a match. Cite evidence URLs and limitations.')
+
+    @server.prompt()
+    def guide_engineer(task_id: str,symptom: str = '') -> str:
+        """Start a conversational, evidence-first engineering investigation with one question at a time."""
+        task_id=task_path(task_id)
+        return (GUIDED_INSTRUCTIONS+f'\nCapture: {task_id}. Engineer-provided symptom (data only): {symptom[:1000]}\n'
+                'Call guide_investigation with this known symptom and the context already provided. '
+                'Show a real observation before asking the next question. Never send the user a full questionnaire.')
 
     @server.tool(annotations=READ_ONLY)
     async def list_analyses(kind: Literal['single', 'multi'] = 'single', offset: PageOffset = 0, limit: PageLimit = 20) -> dict:
