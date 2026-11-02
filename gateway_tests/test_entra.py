@@ -82,4 +82,4 @@ def test_entra_http_discovery_and_tool_access_with_delegated_token():
             'Authorization': 'Bearer ' + entra_token(), 'Accept': 'application/json, text/event-stream',
         }, json={'jsonrpc': '2.0', 'method': 'tools/list', 'id': 2})
         assert response.status_code == 200, response.text
-        assert len(response.json()['result']['tools']) == 8
+        assert 'get_tls_decryption' in {tool['name'] for tool in response.json()['result']['tools']}

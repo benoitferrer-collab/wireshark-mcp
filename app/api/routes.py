@@ -1859,10 +1859,26 @@ async def get_packet_details(task_id: str, packet_num: int):
     
     packets_index = results.get('packets_index', [])
     
-    if packet_num < 0 or packet_num >= len(packets_index):
+    if packet_num < 0 or packet_num >= 250000:
         raise HTTPException(status_code=404, detail="Paquet non trouvé")
-    
-    packet = packets_index[packet_num]
+
+    if packet_num < len(packets_index):
+        packet = packets_index[packet_num]
+    else:
+        # MCP evidence can refer beyond the initial UI index. Resolve safe metadata
+        # from the original capture, keeping the same zero-based packet numbering.
+        import asyncio
+        from app.services.investigation_service import CaptureInvestigator, SearchFilters, InvestigationError
+        path=storage_service.get_pcap_path(task_id)
+        if not path: raise HTTPException(404,"Capture originale indisponible")
+        try:
+            search=await asyncio.to_thread(CaptureInvestigator().search,path,
+                SearchFilters(display_filter=f'frame.number == {packet_num+1}'))
+        except InvestigationError:
+            raise HTTPException(503,"Inspection du paquet indisponible ; réessayez") from None
+        if not search['data']:
+            raise HTTPException(404 if search['coverage']['complete'] else 503,"Paquet absent ou limite d’inspection atteinte")
+        packet={**search['data'][0],'idx':packet_num,'protocol':search['data'][0]['transport']}
     
     # Enrichir avec les informations DNS si disponibles
     dns_info = None

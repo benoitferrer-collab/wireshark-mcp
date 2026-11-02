@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PCAP_STORAGE=vercel OLLAMA_BASE_URL=http://127.0.0.1:11434 MPLCONFIGDIR=/tmp/matplotlib
-RUN apt-get update && apt-get install -y --no-install-recommends libpcap0.8 libmagic1 && rm -rf /var/lib/apt/lists/*
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libpcap0.8 libmagic1 tshark && rm -rf /var/lib/apt/lists/*
 COPY deploy/requirements-cloud.txt /app/requirements-cloud.txt
 RUN pip install --no-cache-dir -r requirements-cloud.txt
 COPY . /app

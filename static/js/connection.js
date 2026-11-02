@@ -1,6 +1,31 @@
 /* Route existing API calls directly to the analysis server, including large uploads. */
 (() => {
     'use strict';
+    if (window.PCAP_CONFIG?.webAuth) {
+        const native = window.fetch.bind(window);
+        const ready = native('/api/identity/me', {credentials:'same-origin'}).then(async response => {
+            if (!response.ok) { window.location.assign('/auth/login'); throw new Error('Connexion requise'); }
+            window.PCAP_IDENTITY = await response.json();
+            return window.PCAP_IDENTITY;
+        });
+        window.PCAP_IDENTITY_READY = ready;
+        window.fetch = async (input, init={}) => {
+            const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+            if (url.origin !== location.origin || !url.pathname.startsWith('/api/')) return native(input,init);
+            const user = await ready;
+            const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+            headers.set('X-CSRF-Token',user.csrf);
+            const options = {...init,headers,credentials:'same-origin'};
+            if (window.PCAP_CONFIG.cloudMode && init.body instanceof FormData && ['/api/upload','/api/multi-pcap/analyze'].includes(url.pathname)) {
+                const {uploadForm}=await import('/cloud-assets/upload.js');
+                return uploadForm(init.body,url.pathname,'');
+            }
+            const response = await native(input,options);
+            if (response.status===401) window.location.assign('/auth/login');
+            return response;
+        };
+        return;
+    }
     const configured = window.PCAP_CONFIG?.apiBaseUrl || '';
     const apiOrigin = configured ? new URL(configured).origin : window.location.origin;
     const nativeFetch = window.fetch.bind(window);

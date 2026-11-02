@@ -90,3 +90,33 @@ async def test_diagnostic_supports_narrow_pointer_and_anomaly_filters_reach_back
         assert '500' in str(result)
         result = await server.call_tool('get_anomalies', {'task_id': 'abc', 'severity': 'high', 'source': 'dns'})
         assert 'high' in str(result)
+
+@pytest.mark.asyncio
+async def test_pagination_limits_are_advertised_and_oversized_diagnostics_are_actionable():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda r: pytest.fail('network called'))) as client:
+        server = create_server(settings(), BackendClient(settings(), client), verifier=object())
+        tools = {tool.name: tool for tool in await server.list_tools()}
+        for name, parameter in [('list_analyses','limit'),('query_analysis','limit'),
+                                ('get_anomalies','limit'),('get_packets','per_page'),
+                                ('get_diagnostic','limit')]:
+            properties=tools[name].inputSchema['properties']
+            assert properties[parameter]['minimum']==1
+            assert properties[parameter]['maximum']==25
+            offset='page' if name=='get_packets' else 'offset'
+            assert properties[offset]['minimum']==(1 if offset=='page' else 0)
+        with pytest.raises(Exception,match=r'limit[\s\S]*25'):
+            await server.call_tool('get_diagnostic',{'task_id':'abc','diagnostic':'tcp-health',
+                'pointer':'/volumetry_timeseries','offset':50,'limit':50})
+
+@pytest.mark.asyncio
+async def test_diagnostic_timeseries_pagination_preserves_all_rows():
+    rows=[{'second':n,'packets_per_sec':n+10} for n in range(80)]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda r:httpx.Response(200,json={'volumetry_timeseries':rows}))) as client:
+        server=create_server(settings(),BackendClient(settings(),client),verifier=object())
+        result=await server.call_tool('get_diagnostic',{'task_id':'abc','diagnostic':'tcp-health',
+            'pointer':'/volumetry_timeseries','offset':50,'limit':25})
+        page=json.loads(result[0].text)['data']
+        assert page['data']==rows[50:75]
+        assert page['next_offset']==75
+        assert page['total']==80
