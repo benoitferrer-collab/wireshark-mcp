@@ -2,6 +2,8 @@
 
 ## Déploiement Vercel et connexion Claude / ChatGPT
 
+Les nouveaux outils de recherche Wireshark, chasse IOC, corrélation, statistiques et preuves cliquables sont décrits dans [le guide d'investigation MCP](docs/MCP_INVESTIGATION.md).
+
 L'interface, l'API, le moteur d'analyse et le service MCP sont déployables sur
 Vercel, avec Blob privé et Queues. Aucun serveur personnel n'est nécessaire.
 Les captures sont limitées à 100 Mio par fichier. Voir le

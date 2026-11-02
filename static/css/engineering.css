@@ -42,3 +42,5 @@ html{scroll-padding-top:86px}body{line-height:1.55;letter-spacing:-.012em;-webki
 .app-container{margin-left:var(--nav-width);width:calc(100% - var(--nav-width))}
 .header-content{flex-direction:row}
 @media(max-width:760px){.nomios-sidebar{width:224px}.app-container{margin-left:0;width:100%}}
+/* Packet evidence must cover the rail as well as the analysis workspace. */
+.app-container:has(>#detailModal.open){z-index:100}

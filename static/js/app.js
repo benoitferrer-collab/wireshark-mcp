@@ -7241,6 +7241,7 @@ Réponds STRICTEMENT en JSON:
 
         try {
             const response = await fetch(`/api/analysis/${taskId}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
 
             this.currentResults = results;
@@ -7254,10 +7255,12 @@ Réponds STRICTEMENT en JSON:
 
             // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);
+            return true;
 
         } catch (error) {
             console.error('Load history item error:', error);
             this.showToast('error', 'Erreur', 'Impossible de charger l\'analyse');
+            return false;
         }
     }
 

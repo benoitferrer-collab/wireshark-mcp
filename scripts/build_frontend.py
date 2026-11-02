@@ -27,6 +27,7 @@ def build(output: Path):
     for name, filename in {
         'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
         'engineering_css': 'css/engineering.css', 'engineering_js': 'js/engineering-ui.js',
+        'evidence_js': 'js/evidence-links.js',
         'nomios_css': 'css/nomios.css', 'identity_ui_js': 'js/identity-ui.js',
         'style_css': 'css/style.css', 'app_js': 'js/app.js',
         'advanced_features_js': 'js/advanced_features.js', 'connection_js': 'js/connection.js',
