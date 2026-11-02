@@ -342,7 +342,7 @@ class PCAPAnalyzer {
     // ==================== THEME MANAGEMENT ====================
 
     initTheme() {
-        const savedTheme = localStorage.getItem('pcap-theme') || 'light';
+        const savedTheme = localStorage.getItem('pcap-theme') || 'dark';
         document.documentElement.setAttribute('data-theme', savedTheme);
         this.updateThemeIcons(savedTheme);
         const savedUiStyle = localStorage.getItem('pcap-ui-style') || 'default';
@@ -542,8 +542,8 @@ class PCAPAnalyzer {
     getThemeColors() {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         return {
-            primary: '#0ea5a4',
-            accent: '#f97316',
+            primary: '#5d9bff',
+            accent: '#a18bfa',
             success: '#10b981',
             warning: '#f59e0b',
             danger: '#ef4444',
@@ -5854,11 +5854,11 @@ Réponds STRICTEMENT en JSON:
             textPrimary: isDark ? '#f8fafc' : '#0f172a',
             grid: isDark ? 'rgba(148,163,184,0.08)' : 'rgba(100,116,139,0.1)',
             tooltip: {
-                backgroundColor: isDark ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.96)',
+                backgroundColor: isDark ? 'rgba(16,24,36,0.98)' : 'rgba(255,255,255,0.96)',
                 borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
                 textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13 }
             },
-            colors: ['#0ea5a4', '#f97316', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#0ea5e9', '#64748b']
+            colors: ['#5d9bff', '#63d6bb', '#a18bfa', '#f0c47a', '#f17f96', '#69c8ef', '#8297b7', '#cc9be5']
         };
     }
 

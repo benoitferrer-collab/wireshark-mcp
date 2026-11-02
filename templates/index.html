@@ -1,14 +1,16 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="light" data-ui-style="default">
+<html lang="fr" data-theme="dark" data-ui-style="default">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b1019">
+    <script>try{const t=localStorage.getItem('pcap-theme');document.documentElement.dataset.theme=t==='light'?'light':'dark';}catch(_){}</script>
     <title>Nomios PcapAnalyzer — Espace d’analyse</title>
     <link rel="stylesheet" href="/static/css/style.css?v={{ assets_version.style_css }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Vis.js for Timeline and Network Graph -->
     <link href="https://unpkg.com/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css" rel="stylesheet">
     <link href="https://unpkg.com/vis-network@9.1.6/styles/vis-network.min.css" rel="stylesheet">
@@ -250,10 +252,11 @@
     </style>
 <link rel="stylesheet" href="/static/css/nomios.css?v={{ assets_version.nomios_css }}">
 <link rel="stylesheet" href="/static/css/tls-decryption.css?v={{ assets_version.tls_css }}">
+<link rel="stylesheet" href="/static/css/engineering.css?v={{ assets_version.engineering_css }}">
 </head>
 
 <body>
-<aside class="nomios-sidebar" aria-label="Navigation principale">
+<aside id="engineeringNav" class="nomios-sidebar" aria-label="Navigation principale">
 <a class="nomios-brand" href="/"><img src="/static/img/nomios.png" alt="Logo Nomios"><span><strong>Nomios<span class="brand-point">.</span></strong><small>PcapAnalyzer</small></span></a>
 <div class="nomios-workspace"><span>NL</span><strong>Nomios Lab</strong><small>Espace partagé</small></div>
 <nav class="nomios-home-nav"><button type="button" data-nomios-view="captures" class="selected"><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5"/></svg>Captures</button></nav><span id="tabsActivePill" hidden aria-hidden="true"></span><div class="nomios-module-nav tabs" aria-label="Navigation d’analyse"><p class="nav-label">EXPLORER</p><button class="tab active" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z"/></svg><span>Vue globale</span></button><button class="tab" data-tab="packets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4h18v14H3z M8 22h8 M12 18v4"/></svg><span>Paquets</span></button><button class="tab" data-tab="streams"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12h4l3-8 6 16 3-8h4"/></svg><span>Flux réseau</span></button><button class="tab" data-tab="timeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 7v5l4 2"/><circle cx="12" cy="12" r="9"/></svg><span>Timeline</span></button><details class="nomios-nav-group"><summary>Protocoles</summary><div><button class="tab" data-tab="dns"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 12h18 M12 3a16 16 0 0 1 0 18 M12 3a16 16 0 0 0 0 18"/><circle cx="12" cy="12" r="9"/></svg><span>DNS</span></button><button class="tab" data-tab="http"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 12h8 M12 8l4 4-4 4"/></svg><span>HTTP / HTTPS</span></button><button class="tab tab-advanced" data-tab="tls-audit" title="TLS Security Audit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3"/></svg><span>Audit TLS</span></button></div></details><details class="nomios-nav-group"><summary>Diagnostics</summary><div><button class="tab tab-advanced" data-tab="tcp-health" title="Diagnostic Performance TCP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 12h5l3-7 4 14 3-7h5"/></svg><span>Santé TCP</span></button><button class="tab tab-advanced" data-tab="qos" title="QoS & Performance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 20V12 M10 20V4 M16 20V8 M22 20V2"/></svg><span>QoS</span></button><button class="tab tab-advanced" data-tab="threat-intel" title="Threat Intelligence"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l9 4v6c0 4-9 8-9 8s-9-4-9-8V7z"/></svg><span>Threat Intel</span></button><button class="tab tab-advanced" data-tab="flow-behavior" title="Flow Behavior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17L9 11l4 3 8-10 M16 4h5v5"/></svg><span>C2 / Exfiltration</span></button><button class="tab tab-advanced" data-tab="lateral-movement" title="Mouvement Latéral"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h6v6H3z M15 12h6v6h-6z M9 9h9v3"/></svg><span>Mouvements latéraux</span></button></div></details><details class="nomios-nav-group"><summary>Collaboration</summary><div><button class="tab" data-tab="multi-pcap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 4h7v7H3z M14 4h7v7h-7z M8 15h8v6H8z"/></svg><span>Multi-PCAP</span></button><button class="tab tab-team" data-tab="team-ia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v18 M3 12h18 M5 5l14 14 M5 19L19 5"/></svg><span>Team IA</span></button><button class="tab tab-advanced" data-tab="playbook" title="IR Playbook & DFIR"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5"/></svg><span>IR Playbook</span></button></div></details></div><nav class="nomios-sidebar-bottom"><button type="button" data-nomios-view="assistants"><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3l3 6 6 3-6 3-3 6-3-6-6-3 6-3z"/></svg> Assistants IA</button><button type="button" data-nomios-view="admin" id="nomiosAdminNav" hidden><svg class="nomios-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2"/></svg> Administration</button></nav>
@@ -268,10 +271,15 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
+<button type="button" class="engineering-menu" id="engineeringMenu" aria-label="Ouvrir la navigation" aria-controls="engineeringNav" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
                 <div class="logo">
 <span class="nomios-header-label">Espace d’analyse</span><span class="nomios-header-separator">/</span><h1>Nomios PcapAnalyzer</h1>
                 </div>
-                <details class="nomios-preferences"><summary>Préférences <span aria-hidden="true">⌄</span></summary><div class="header-info">
+                <div class="engineering-actions">
+<button type="button" id="engineeringCommandButton" class="engineering-search" aria-label="Rechercher une vue" aria-keyshortcuts="Meta+K Control+K"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Accès rapide…</span><kbd>⌘ K</kbd></button>
+<button type="button" id="engineeringImportButton" class="engineering-import" aria-label="Importer une capture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="import-label">Importer</span></button>
+<button type="button" class="theme-toggle" id="themeToggle" aria-label="Changer de thème"><span class="theme-toggle-icon" id="sunIcon" aria-hidden="true">☀</span><span class="theme-toggle-icon active" id="moonIcon" aria-hidden="true">☾</span><span class="theme-toggle-slider"></span></button>
+<details class="nomios-preferences"><summary>Préférences <span aria-hidden="true">⌄</span></summary><div class="header-info">
                     <span class="version">v{{ version }}</span>
                     <span class="status-indicator online">● API Online</span>
 
@@ -291,12 +299,6 @@
                         🏷️ MAC
                     </button>
 
-                    <!-- Theme Toggle -->
-                    <div class="theme-toggle" id="themeToggle" title="Changer de thème">
-                        <span class="theme-toggle-icon" id="sunIcon">☀️</span>
-                        <span class="theme-toggle-icon active" id="moonIcon">🌙</span>
-                        <div class="theme-toggle-slider"></div>
-                    </div>
                     <button class="ui-style-toggle" id="liquidToggle" type="button" title="Activer le style Superneon" aria-pressed="false">
                         <span class="ui-style-icon">✦</span>
                         <span class="ui-style-label">Neon</span>
@@ -341,8 +343,8 @@
             <section class="upload-section" id="uploadSection">
                 <div class="premium-intro">
                     <p class="premium-intro-kicker">NOMIOS PCAPANALYZER</p>
-                    <h2 class="premium-intro-title">Votre réseau, en clair.</h2>
-                    <p class="premium-intro-subtitle">Importez vos captures, explorez les preuves et remontez à la source des incidents.</p>
+                    <h2 class="premium-intro-title">Chaque paquet raconte<br>une histoire.</h2>
+                    <p class="premium-intro-subtitle">Remontez du symptôme à la preuve. Explorez les flux, comprenez les protocoles et trouvez ce qui échappe au premier regard.</p>
                     <div class="premium-intro-badges">
                         <span>TCP Deep Analysis</span>
                         <span>Threat Intel</span>
@@ -358,8 +360,8 @@
                             <line x1="12" y1="3" x2="12" y2="15" />
                         </svg>
                     </div>
-                    <h2>Glissez-déposez votre fichier PCAP</h2>
-                    <p>ou cliquez pour sélectionner un fichier</p>
+                    <h2>Une capture. Toutes les réponses.</h2>
+                    <p>Glissez votre PCAP ici, ou cliquez pour le parcourir.</p>
                     <p class="file-info">Formats acceptés: .pcap, .pcapng, .cap (Max: {{ max_file_size_gb }}GB)</p>
                     <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap" hidden>
                 </div>
@@ -385,8 +387,8 @@
             <section class="results-section" id="resultsSection" style="display: none;">
                 <div class="card premium-hero">
                     <div class="premium-hero-copy">
-                        <p class="premium-hero-kicker">DOSSIER D’INVESTIGATION</p>
-                        <h2>Analyse de capture</h2>
+                        <p class="premium-hero-kicker">ANALYSE RÉSEAU · PREUVES & DIAGNOSTICS</p>
+                        <h2>Au cœur de votre capture.</h2>
                         <p id="analysisMetaLabel">Résultats consolidés et prêts pour investigation.</p>
                     </div>
                     <div class="premium-hero-signals">
@@ -2025,6 +2027,12 @@
                 </div>
             </div>
         </footer>
+<button type="button" id="engineeringNavBackdrop" class="engineering-nav-backdrop" aria-label="Fermer la navigation" hidden></button>
+<dialog id="engineeringCommand" class="engineering-command" aria-label="Accès rapide aux vues">
+ <div class="engineering-command-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="engineeringCommandInput" placeholder="Où souhaitez-vous investiguer ?" role="combobox" aria-label="Rechercher une vue" aria-autocomplete="list" aria-controls="engineeringCommandList" aria-expanded="true" autocomplete="off"></div>
+ <div id="engineeringCommandList" class="engineering-command-list" role="listbox" aria-label="Vues et actions disponibles"></div>
+ <div class="engineering-command-footer"><span><kbd>↑ ↓</kbd>Naviguer</span><span><kbd>↵</kbd>Ouvrir</span><span><kbd>esc</kbd>Fermer</span></div>
+</dialog>
         <!-- Scripts -->
         <!-- ECharts (pour QoS) -->
         <!-- ECharts est déjà chargé (defer) dans <head>: pas de second bundle -->
@@ -2034,6 +2042,7 @@
         <script defer src="/static/js/app.js?v={{ assets_version.app_js }}"></script>
         <script defer src="/static/js/identity-ui.js?v={{ assets_version.identity_ui_js }}"></script>
 <script defer src="/static/js/tls-decryption.js?v={{ assets_version.tls_js }}"></script>
+<script defer src="/static/js/engineering-ui.js?v={{ assets_version.engineering_js }}"></script>
 </body>
 
 </html>

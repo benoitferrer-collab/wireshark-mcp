@@ -154,6 +154,8 @@ async def root(request: Request):
     assets_version = {
         "tls_js": _asset_version("js", "tls-decryption.js"),
         "tls_css": _asset_version("css", "tls-decryption.css"),
+        "engineering_css": _asset_version("css", "engineering.css"),
+        "engineering_js": _asset_version("js", "engineering-ui.js"),
         "nomios_css": _asset_version("css", "nomios.css"),
         "identity_ui_js": _asset_version("js", "identity-ui.js"),
         "advanced_features_js": _asset_version("js", "advanced_features.js"),
