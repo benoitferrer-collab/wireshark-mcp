@@ -44,3 +44,5 @@ html{scroll-padding-top:86px}body{line-height:1.55;letter-spacing:-.012em;-webki
 @media(max-width:760px){.nomios-sidebar{width:224px}.app-container{margin-left:0;width:100%}}
 /* Packet evidence must cover the rail as well as the analysis workspace. */
 .app-container:has(>#detailModal.open){z-index:100}
+
+.nomios-sidebar .nomios-security-link{display:flex;align-items:center;gap:11px;min-height:40px;padding:10px 13px;border-radius:7px;color:var(--text-secondary);font-size:12px;text-decoration:none}.nomios-sidebar .nomios-security-link:hover{background:var(--bg-hover);color:var(--primary)}

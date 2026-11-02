@@ -140,6 +140,8 @@ app.include_router(api_router)
 app.include_router(additional_router)
 app.include_router(team_router)
 app.include_router(create_mcp_router(storage_service, tls_service=TLS_SERVICE))
+from app.security_page import create_security_router
+app.include_router(create_security_router(WEB_IDENTITY))
 
 
 @app.get("/", response_class=HTMLResponse)
