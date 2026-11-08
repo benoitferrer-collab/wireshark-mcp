@@ -35,8 +35,10 @@ Files: static/js/app.js, gateway_tests/test_request_lifecycle.cjs.
 
 ### Task 3: Release
 - [x] Independent code review, resolve material findings, rerun affected checks.
-- [ ] Document support demo walkthrough with honest limitations; commit, push existing branch, deploy and verify auth gates and assets.
+- [x] Document support demo walkthrough with honest limitations; commit, push existing branch, deploy and verify auth gates and assets.
 
 ## Verification
 
 200 Python tests, 31 JavaScript tests passed; static build and diff whitespace checks passed. Independent reviewer confirmed no remaining P1/P2 in revised concurrency. Browser: real synthetic capture, diagnostic links, incident context/copy, search empty state, light/dark, 390px mobile without page overflow, no console errors. Screenshot saved outside repository.
+
+Production release: https://wireshark-mcp.vercel.app (deployment dpl_Dog2nAjAJKhNWYMxFTvfiLv9rrF9). CLI completed successfully and production alias applied. New JS/CSS returned HTTP200 and matched local source SHA256. Anonymous /api/identity/me, /api/history, /api/security/overview and /mcp returned401. No authenticated production session was exercised by this release check.
