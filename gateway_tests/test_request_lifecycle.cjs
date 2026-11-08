@@ -63,3 +63,17 @@ test('cancelled demo cannot commit its in-flight capture load',async()=>{
  const pending=app.loadHistoryItem('demo-test',()=>active);active=false;resolve(ok({filename:'Demo'}));
  assert.equal(await pending,false);assert.equal(app.currentTaskId,'old');assert.equal(app.currentResults.filename,'old');
 });
+test('cancelled stream inspection never overwrites another capture panel',async()=>{
+ let resolve;const {app,nodes}=setup(()=>new Promise(r=>resolve=r));let active=true;
+ const pending=app.showStreamDetails(0,'',()=>active);active=false;app.currentTaskId='real-new';resolve(ok({stream_info:{src_ip:'DEMO'}}));await pending;
+ assert.equal(nodes.has('streamDetailContainer'),false);
+});
+test('cancelled packet inspection never overwrites a new modal',async()=>{
+ let resolve;const {app,nodes}=setup(()=>new Promise(r=>resolve=r));let active=true;app.openModal=()=>{};
+ app.showPacketDetails(7,()=>active);active=false;app.currentTaskId='real-new';resolve(ok({basic_info:{src_ip:'DEMO'}}));await new Promise(r=>setImmediate(r));
+ assert.equal(nodes.has('modalBody'),false);
+});
+test('failed stream inspection explicitly reports failure to the presenter',async()=>{
+ const {app}=setup(async()=>({ok:false,status:503}));
+ assert.equal(await app.showStreamDetails(0,'tcp-0'),false);
+});

@@ -36,3 +36,16 @@ def test_demo_original_supports_real_wireshark_investigation():
     assert scan['coverage']['complete'] is True
     assert scan['total_matching']==6
     assert scan['data'][0]['frame_number']==8
+
+def test_presenter_facts_come_from_original_capture_and_reject_real_tasks(tmp_path):
+    import pytest
+    from app.demo import install_demo, demo_evidence
+    from app.services.storage_service import StorageService
+    store=StorageService();store.upload_dir=tmp_path/'uploads';store.results_dir=tmp_path/'results';store._ensure_directories()
+    demo=install_demo(store);facts=demo_evidence(store,demo['task_id'])
+    assert facts['resets']['count']==6
+    assert facts['resets']['frames'][0]==8
+    assert facts['dns_errors']['count']==4
+    assert facts['http_ok']['count']==18
+    assert facts['coverage']['complete'] is True
+    with pytest.raises(ValueError):demo_evidence(store,'real-capture')

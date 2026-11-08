@@ -3261,9 +3261,12 @@ Réponds STRICTEMENT en JSON:
         }
     }
 
-    async showStreamDetails(streamId, streamIdentifier = '') {
+    async showStreamDetails(streamId, streamIdentifier = '', isCurrent = () => true) {
+        const taskId=this.currentTaskId, request=this.streamDetailRequest=(this.streamDetailRequest||0)+1;
+        const stale=()=>!isCurrent()||taskId!==this.currentTaskId||request!==this.streamDetailRequest;
         if (!this.currentTaskId) return;
 
+        const requestSignal=AbortSignal.timeout(15000);
         this.showToast('info', 'Chargement', 'Récupération des détails du stream...');
 
         try {
@@ -3277,7 +3280,7 @@ Réponds STRICTEMENT en JSON:
             let lastError = null;
             for (const url of urls) {
                 try {
-                    const response = await fetch(url, { cache: 'no-store' });
+                    const response = await fetch(url, { cache: 'no-store', signal:requestSignal });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     data = await response.json();
                     break;
@@ -3289,6 +3292,7 @@ Réponds STRICTEMENT en JSON:
                 throw lastError || new Error('Stream indisponible');
             }
 
+            if(stale())return false;
             const container = document.getElementById('streamDetailContainer');
             const idSpan = document.getElementById('streamDetailId');
             const conversation = document.getElementById('streamConversation');
@@ -3345,8 +3349,10 @@ Réponds STRICTEMENT en JSON:
             }
 
             this.showToast('success', 'Stream', `Détails du stream #${streamId} chargés`);
+            return true;
 
         } catch (error) {
+            if(stale())return false;
             console.error('Stream details error:', error);
             this.showToast('error', 'Erreur', `Impossible de charger les détails du stream: ${error.message}`);
 
@@ -3358,8 +3364,10 @@ Réponds STRICTEMENT en JSON:
                     <p style="font-size: 0.85rem;">${error.message}</p>
                 </div>`;
             }
+            if(stale())return false;
             const container = document.getElementById('streamDetailContainer');
             if (container) container.style.display = 'block';
+            return false;
         }
     }
 
@@ -7440,7 +7448,9 @@ Réponds STRICTEMENT en JSON:
         });
     }
 
-    showPacketDetails(packetNum) {
+    showPacketDetails(packetNum, isCurrent = () => true) {
+        const taskId=this.currentTaskId, request=this.packetDetailRequest=(this.packetDetailRequest||0)+1;
+        const stale=()=>!isCurrent()||taskId!==this.currentTaskId||request!==this.packetDetailRequest;
         const OSI_LAYERS = [
             { key: 'l1_physical', num: 1, label: 'Physical', color: '#64748b', icon: '📡' },
             { key: 'l2_datalink', num: 2, label: 'Data Link', color: '#3b82f6', icon: '🔗' },
@@ -7451,11 +7461,12 @@ Réponds STRICTEMENT en JSON:
             { key: 'l7_application', num: 7, label: 'Application', color: '#06b6d4', icon: '📦' },
         ];
 
-        this.openModal(`Paquet #${packetNum} — Inspection OSI`, '<div class="loading-spinner"><div class="spinner"></div></div>');
+        this.openModal(`Paquet #${Number(packetNum) + 1} — Inspection OSI`, '<div class="loading-spinner"><div class="spinner"></div></div>');
 
-        fetch(`/api/analysis/${this.currentTaskId}/packet/${packetNum}`)
+        return fetch(`/api/analysis/${taskId}/packet/${packetNum}`, {signal:AbortSignal.timeout(15000)})
             .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
             .then(data => {
+                if(stale())return false;
                 const basic = data.basic_info || {};
                 const proto = basic.protocol || data.l4_transport?.protocol || '?';
                 const src = basic.src_ip ? `${basic.src_ip}${basic.src_port ? ':' + basic.src_port : ''}` : '?';
@@ -7548,13 +7559,16 @@ Réponds STRICTEMENT en JSON:
                     modalBody.innerHTML = html;
                     this.enrichModalMacVendors(modalBody);
                 }
+                return true;
             })
             .catch(() => {
+                if(stale())return false;
                 const modalBody = document.getElementById('modalBody');
                 if (modalBody) {
                     modalBody.innerHTML = '<p style="color:var(--danger);padding:1rem">Erreur de chargement du paquet.</p>';
                     this.enrichModalMacVendors(modalBody);
                 }
+                return false;
             });
     }
 
