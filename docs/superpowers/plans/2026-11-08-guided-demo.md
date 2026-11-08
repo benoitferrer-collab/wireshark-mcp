@@ -6,6 +6,8 @@ Authorized scope: one-click button and /?demo=1 URI showing real product workflo
 - [x] Test local/cloud install and reuse, then implement endpoint under existing middleware.
 - [x] Test tour sequence and URL trigger; implement button, versioned assets, responsive controls.
 - [x] Run full checks, browser tour verification and independent review.
-- [ ] Commit, deploy, verify anonymous access denied and public assets, push branch.
+- [x] Commit, deploy, verify anonymous access denied and public assets, push branch.
 
 Verification: 204 Python tests and 34 JS tests pass. Actual TShark finds six RST frames, first at frame8. Cloud test verifies original PCAP survives a new instance. Browser traversed all15steps with no console errors and verified autoplay/pause/stop/relaunch. Review cancellation and real-capture-switch races corrected with regression tests.
+
+Production deployment dpl_7jwJb9YnLFzxJVeAtAk3gR1wrQS6 is READY and aliased to wireshark-mcp.vercel.app. Public tour JS/CSS matched the tested source. Anonymous POST /api/demo/start and /mcp remain401. Production authenticated installation not exercised; cloud/local storage behavior covered by tests. Mobile390px tour controls fit without page overflow; screenshot saved outside repo.
