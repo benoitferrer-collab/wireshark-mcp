@@ -142,6 +142,8 @@ app.include_router(team_router)
 app.include_router(create_mcp_router(storage_service, tls_service=TLS_SERVICE))
 from app.security_page import create_security_router
 app.include_router(create_security_router(WEB_IDENTITY))
+from app.demo import create_demo_router
+app.include_router(create_demo_router(storage_service))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -156,6 +158,7 @@ async def root(request: Request):
     assets_version = {
         "tls_js": _asset_version("js", "tls-decryption.js"),
         "tls_css": _asset_version("css", "tls-decryption.css"),
+        "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),
         "support_js": _asset_version("js", "support-workspace.js"),
         "engineering_css": _asset_version("css", "engineering.css"),

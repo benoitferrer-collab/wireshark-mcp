@@ -28,3 +28,6 @@ node_modules/
 cloud_upload/public/
 .vercel
 .env*
+
+# Reproducible, synthetic fixture used by the authenticated product tour.
+!app/demo_data/DEMO_Nomios_Support.pcap

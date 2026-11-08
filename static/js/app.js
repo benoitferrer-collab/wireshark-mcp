@@ -7247,7 +7247,7 @@ Réponds STRICTEMENT en JSON:
         window.PcapSupport?.renderHistory(history, this);
     }
 
-    async loadHistoryItem(taskId) {
+    async loadHistoryItem(taskId, isCurrent = () => true) {
         if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(String(taskId || ''))) return false;
         const captureGeneration = this.captureRequestGeneration || 0;
         const generation = this.navigationRequestGeneration = (this.navigationRequestGeneration || 0) + 1;
@@ -7257,7 +7257,7 @@ Réponds STRICTEMENT en JSON:
             const response = await fetch(`/api/analysis/${taskId}`, {signal: AbortSignal.timeout(30000)});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
-            if (stale()) return false;
+            if (stale() || !isCurrent()) return false;
             this.captureRequestGeneration = captureGeneration + 1;
             this.pollGeneration = (this.pollGeneration || 0) + 1;
             if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
@@ -7278,7 +7278,7 @@ Réponds STRICTEMENT en JSON:
             this.requestChartsResize(2);
             return true;
         } catch (error) {
-            if (stale()) return false;
+            if (stale() || !isCurrent()) return false;
             console.error('Load history item error:', error);
             this.showToast('error', 'Chargement impossible', 'La capture actuelle est conservée. Réessayez dans un instant.');
             return false;

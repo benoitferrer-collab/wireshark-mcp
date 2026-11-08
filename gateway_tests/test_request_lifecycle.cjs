@@ -58,3 +58,8 @@ test('failed navigation during upload does not discard successfully queued uploa
  const upload=app.uploadFile({name:'new.pcap'});await app.loadHistoryItem('unavailable');resolveUpload(ok({task_id:'new-upload'}));await upload;
  assert.equal(app.currentTaskId,'new-upload');
 });
+test('cancelled demo cannot commit its in-flight capture load',async()=>{
+ let resolve;const {app}=setup(()=>new Promise(r=>resolve=r));let active=true;
+ const pending=app.loadHistoryItem('demo-test',()=>active);active=false;resolve(ok({filename:'Demo'}));
+ assert.equal(await pending,false);assert.equal(app.currentTaskId,'old');assert.equal(app.currentResults.filename,'old');
+});

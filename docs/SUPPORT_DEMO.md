@@ -22,3 +22,11 @@
 ## Vérifications de cette évolution
 
 Tests de course entre chargements, nouvel upload et navigation ; réponses serveur en erreur ; paquets tardifs ; historique supérieur à 50 captures ; filtrage et métadonnées manquantes. Vérification visuelle de la bibliothèque, du formulaire et des liens de diagnostic sur PCAP synthétique, ainsi que du rendu mobile.
+
+## Lancer la visite intégrée
+
+Après connexion, cliquez sur **▶ Démo** dans l’en-tête ou ouvrez **https://wireshark-mcp.vercel.app/?demo=1**. Une capture synthétique de 192 paquets est préparée dans l’espace partagé, puis la visite démarre. Les prochaines ouvertures réutilisent cette démonstration ; si elle a été supprimée, une nouvelle est créée.
+
+**Suivant / Précédent** permettent de commenter chaque écran ; **Lecture auto** avance toutes les 12 secondes. **× / Échap** arrête la visite. Ouvrir une autre capture ou envoyer un nouveau PCAP arrête aussi la visite. Vous restez libre d’explorer les écrans.
+
+Le scénario présente DNS, HTTP, retransmissions et resets. Il ne contient ni trafic malveillant réel, ni TLS à déchiffrer, ni deux points de capture pour Multi-PCAP. Ces modules restent disponibles pour une démonstration avec vos jeux de données adaptés. Aucun appel à Claude/ChatGPT ni enrichissement externe n’est déclenché automatiquement. Le PCAP de démonstration est disponible via les outils MCP habituels.
