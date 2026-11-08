@@ -98,5 +98,5 @@
   user=identity;$('nomiosUserName').textContent=identity.name;$('nomiosUserStatus').textContent='Microsoft Entra ID';$('nomiosLogout').hidden=false;$('nomiosAdminNav').hidden=!identity.is_admin;
   const logoutButton=element('button','Se déconnecter','btn btn-secondary');logoutButton.type='button';logoutButton.addEventListener('click',logout);document.querySelector('.header-info').append(logoutButton);
  }).catch(()=>{$('nomiosUserStatus').textContent='Connexion requise';});
- else {$('nomiosUserStatus').textContent='Accès par clé API';}
+ else {$('nomiosUserStatus').textContent=(window.PCAP_CONFIG?.requiresAccessKey||window.PCAP_CONFIG?.apiBaseUrl)?'Accès par clé API':'Mode local · sans authentification';}
 })();

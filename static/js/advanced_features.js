@@ -1369,10 +1369,10 @@ function advBuildTcpHealthFocusCatalog(data) {
             }
         },
         culprits: {
-            title: '🕵️ Focus Coupables Probables',
+            title: '🕵️ Focus Équipements à vérifier',
             description: 'Classement des équipements/IP les plus corrélés aux symptômes.',
             kpis: [
-                { label: 'Coupables candidats', value: `${culpritsCount}` },
+                { label: 'Équipements candidats', value: `${culpritsCount}` },
                 { label: 'Health score', value: `${healthScore.toFixed(1)}/100` },
                 { label: 'RTT p95', value: `${p95.toFixed(2)} ms` },
                 { label: 'Jitter', value: `${jitter.toFixed(2)} ms` }
@@ -1384,7 +1384,7 @@ function advBuildTcpHealthFocusCatalog(data) {
                 healthScore < 45
                     ? 'Santé TCP dégradée: prioriser les équipements top scorés.'
                     : (healthScore < 70 ? 'Santé TCP intermédiaire: surveiller les top suspects.' : 'Santé TCP correcte.'),
-                'Vérifier en priorité les causes avec confiance la plus élevée.'
+                'Vérifier les pistes les mieux classées ; leur score ne prouve pas la causalité.'
             ],
             chart: bar(
                 'Santé/Coupables',
@@ -1682,7 +1682,7 @@ function advRenderTcpHealthTables(data, focusKey = 'sessions') {
             <span class="adv-rec-num">${idx + 1}</span>
             <p>
                 <strong>${advEscape(row.culprit || '-')}</strong>
-                (${advEscape(row.vendor || 'Inconnu')}) • confiance ${advNum(row.confidence, 0)}%<br>
+                (${advEscape(row.vendor || 'Inconnu')}) • score heuristique ${advNum(row.confidence, 0)}/100<br>
                 <span style="color:var(--text-muted)">${advEscape(row.top_cause || 'Cause non déterminée')} — ${advEscape(row.evidence || '')}</span>
             </p>
         </div>
@@ -1691,7 +1691,7 @@ function advRenderTcpHealthTables(data, focusKey = 'sessions') {
         ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Constructeurs les plus impactés</h4>${vendors}</div>`
         : '';
     const culpritsHtml = culpritRows
-        ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Coupables probables (root-cause matrix)</h4>${culpritRows}</div>`
+        ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Équipements à vérifier en priorité</h4><p class="support-evidence-note">Classement heuristique des signaux observés. Le score n’est pas une probabilité de responsabilité ; le point de capture et les journaux doivent confirmer l’hypothèse.</p>${culpritRows}</div>`
         : '';
     advSetHTML(
         'tcpHealthDiagnosis',
@@ -1849,7 +1849,7 @@ async function loadTcpHealth(taskId, forceRefresh = false) {
             ${metricCard('RTT Spread', `${rttRange.toFixed(1)} ms`, '🌡️', rttRange >= 100 ? 'adv-metric-warning' : '', 'data-tcp-focus="rtt"')}
             ${metricCard(`Risque Goulot ${advHealthPill(sum.bottleneck_level)}`, `${bottleneckScore}/100`, '🧠', bottleneckClass, 'data-tcp-focus="bottleneck"')}
             ${metricCard('Health Score', `${healthScore.toFixed(1)}/100`, '🧭', healthScore < 45 ? 'adv-metric-danger' : (healthScore < 70 ? 'adv-metric-warning' : ''), 'data-tcp-focus="culprits"')}
-            ${metricCard('Coupables probables', culpritCount, '🕵️', culpritCount > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="culprits"')}
+            ${metricCard('Équipements à vérifier', culpritCount, '🕵️', culpritCount > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="culprits"')}
             ${metricCard('Équipements touchés', advNum(sum.problematic_macs_count, 0), '🧩', advNum(sum.problematic_macs_count, 0) > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="infra"')}
             ${metricCard('Broadcast', `${advNum(sum.broadcast_percentage, 0).toFixed(2)}%`, '📣', advNum(sum.broadcast_percentage, 0) >= 2 ? 'adv-metric-warning' : '', 'data-tcp-focus="infra"')}
         </div>`);

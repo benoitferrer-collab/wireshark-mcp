@@ -2047,6 +2047,9 @@ Réponds STRICTEMENT en JSON:
     // ==================== FILE UPLOAD ====================
 
     async uploadFile(file) {
+        const generation = this.captureRequestGeneration = (this.captureRequestGeneration || 0) + 1;
+        this.pollGeneration = (this.pollGeneration || 0) + 1;
+        if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
         document.dispatchEvent(new CustomEvent('pcap:upload-start'));
         document.getElementById('uploadArea').style.display = 'none';
         document.getElementById('progressContainer').style.display = 'block';
@@ -2071,6 +2074,7 @@ Réponds STRICTEMENT en JSON:
             }
 
             const data = await response.json();
+            if (generation !== this.captureRequestGeneration) return;
             this.currentTaskId = data.task_id;
             document.dispatchEvent(new CustomEvent('pcap:upload-queued', {detail:{taskId:data.task_id}}));
             this.renderSignatures = { dns: '', http: '' };
@@ -2088,6 +2092,7 @@ Réponds STRICTEMENT en JSON:
             this.startStatusPolling();
 
         } catch (error) {
+            if (generation !== this.captureRequestGeneration) return;
             document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
             console.error('Upload error:', error);
             this.showToast('error', 'Erreur Upload', error.message);
@@ -2097,39 +2102,47 @@ Réponds STRICTEMENT en JSON:
     }
 
     startStatusPolling() {
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-        }
-
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        const generation = this.pollGeneration = (this.pollGeneration || 0) + 1;
+        const taskId = this.currentTaskId;
+        let busy = false, failures = 0;
         this.pollInterval = setInterval(async () => {
-            // Stopper si l'analyse a été réinitialisée entre deux ticks
-            if (!this.currentTaskId) {
-                clearInterval(this.pollInterval);
-                this.pollInterval = null;
+            if (generation !== this.pollGeneration || taskId !== this.currentTaskId || !taskId) {
+                if (generation === this.pollGeneration) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                }
                 return;
             }
+            if (busy) return;
+            busy = true;
             try {
-                const response = await fetch(`/api/status/${this.currentTaskId}`);
+                const response = await fetch(`/api/status/${taskId}`, {signal: AbortSignal.timeout(15000)});
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
-
+                if (generation !== this.pollGeneration || taskId !== this.currentTaskId) return;
+                failures = 0;
                 this.updateProgress(data);
-
-                if (data.status === 'completed') {
+                if (data.status === 'completed' || data.status === 'failed') {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
-                    this.showToast('success', 'Analyse terminée', 'Les résultats sont prêts !');
-                    this.loadResults();
-                } else if (data.status === 'failed') {
-                    document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
-                    clearInterval(this.pollInterval);
-                    this.pollInterval = null;
-                    this.showToast('error', 'Erreur', data.message || 'Erreur lors de l\'analyse');
-                    this.showError(data.message || 'Erreur lors de l\'analyse');
-                    this.resetUploadArea();
+                    if (data.status === 'completed') {
+                        this.showToast('success', 'Analyse terminée', 'Les résultats sont prêts.');
+                        await this.loadResults();
+                    } else {
+                        document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
+                        this.showToast('error', 'Erreur', data.message || 'Erreur lors de l’analyse');
+                        this.showError(data.message || 'Erreur lors de l’analyse');
+                        this.resetUploadArea();
+                    }
                 }
             } catch (error) {
+                if (generation !== this.pollGeneration || taskId !== this.currentTaskId) return;
                 console.error('Status polling error:', error);
-            }
+                failures++;
+                const status = document.getElementById('progressStatus');
+                if (status) status.textContent = failures >= 3 ? 'Serveur temporairement indisponible. Nouvelle tentative automatique…' : 'Vérification du statut en cours…';
+            } finally { busy = false; }
         }, 1000);
     }
 
@@ -2152,10 +2165,14 @@ Réponds STRICTEMENT en JSON:
     }
 
     async loadResults() {
+        const taskId = this.currentTaskId;
+        const captureGeneration = this.captureRequestGeneration || 0;
+        const generation = this.resultsRequestGeneration = (this.resultsRequestGeneration || 0) + 1;
         try {
-            const response = await fetch(`/api/analysis/${this.currentTaskId}`);
+            const response = await fetch(`/api/analysis/${taskId}`, {signal: AbortSignal.timeout(30000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
-
+            if (taskId !== this.currentTaskId || generation !== this.resultsRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0)) return;
             this.currentResults = results;
 
             document.getElementById('progressContainer').style.display = 'none';
@@ -2171,6 +2188,7 @@ Réponds STRICTEMENT en JSON:
             this.requestChartsResize(2);
 
         } catch (error) {
+            if (taskId !== this.currentTaskId || generation !== this.resultsRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0)) return;
             console.error('Error loading results:', error);
             this.showToast('error', 'Erreur', 'Erreur lors du chargement des résultats');
             this.showError('Erreur lors du chargement des résultats');
@@ -2596,6 +2614,10 @@ Réponds STRICTEMENT en JSON:
     // ==================== TIMELINE ====================
 
     async loadTimeline(filters = {}) {
+        const taskId = this.currentTaskId;
+        const generation = this.timelineRequestGeneration = (this.timelineRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.timelineRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) {
             console.error('❌ Pas de task_id');
             return;
@@ -2621,6 +2643,7 @@ Réponds STRICTEMENT en JSON:
             }
 
             const data = await response.json();
+            if (stale()) return;
             console.log('✅ Réponse timeline:', data);
 
             let timelineData = data.timeline || data;
@@ -2645,6 +2668,7 @@ Réponds STRICTEMENT en JSON:
             this.displayTimelineStats(timelineData.summary || {});
 
         } catch (error) {
+            if (stale()) return;
             console.error('❌ Erreur timeline:', error);
             const fallbackTimeline = this.buildTimelineFromPacketsIndex(this.currentResults?.packets_index || []);
             if (fallbackTimeline.events.length > 0) {
@@ -3115,6 +3139,10 @@ Réponds STRICTEMENT en JSON:
     }
 
     async loadStreams(forceRefresh = false) {
+        const taskId = this.currentTaskId;
+        const generation = this.streamsRequestGeneration = (this.streamsRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.streamsRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) return;
 
         const tbody = document.querySelector('#streamsTable tbody');
@@ -3151,6 +3179,7 @@ Réponds STRICTEMENT en JSON:
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
+            if (stale()) return;
             const apiStreams = Array.isArray(data.streams) ? data.streams : [];
             const normalized = apiStreams.map((stream, idx) => this.normalizeStreamEntry(stream, idx));
             const displayed = normalized;
@@ -3165,6 +3194,7 @@ Réponds STRICTEMENT en JSON:
             this.updateStreamsPaginationControls(this.streamTotal || normalized.length, this.streamOffset, this.streamLimit);
             this.setMenuHealthStatus('streams', this.streamTotal > 0 ? 'ok' : 'missing', this.streamTotal > 0 ? `${this.streamTotal.toLocaleString('fr-FR')} streams` : 'Aucun stream');
         } catch (error) {
+            if (stale()) return;
             console.error('Streams API error:', error);
 
             const fallback = this.buildFallbackStreamsFromResults();
@@ -5595,6 +5625,10 @@ Réponds STRICTEMENT en JSON:
     // ==================== PACKETS ====================
 
     async loadPackets(forceRefresh = false) {
+        const taskId = this.currentTaskId;
+        const generation = this.packetsRequestGeneration = (this.packetsRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.packetsRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) return;
         if (!this.virtualScroll) {
             const container = document.getElementById('packetVirtualContainer');
@@ -5614,7 +5648,9 @@ Réponds STRICTEMENT en JSON:
 
         try {
             const response = await fetch(`/api/analysis/${this.currentTaskId}/packets?limit=10000`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            if (stale()) return;
             this.allPackets = data.packets || data || [];
 
             // Pre-compute index for fast filtering
@@ -5633,9 +5669,10 @@ Réponds STRICTEMENT en JSON:
             this.virtualScroll.setData(this.allPackets, (pkt, idx) => this.renderPacketRow(pkt, idx));
             this.updateFilterStats();
             this.setupResizableColumns();
-            this.packetsLoadedTaskId = this.currentTaskId;
+            this.packetsLoadedTaskId = taskId;
             this.setMenuHealthStatus('packets', this.allPackets.length > 0 ? 'ok' : 'missing', this.allPackets.length > 0 ? `${this.allPackets.length.toLocaleString('fr-FR')} paquets` : 'Aucun paquet');
         } catch (e) {
+            if (stale()) return;
             console.error('Error loading packets:', e);
             this.packetsLoadedTaskId = '';
             this.setMenuHealthStatus('packets', 'error', `Erreur paquets: ${e.message}`);
@@ -7189,77 +7226,61 @@ Réponds STRICTEMENT en JSON:
     // ==================== HISTORY ====================
 
     async loadHistory() {
+        const generation = this.historyRequestGeneration = (this.historyRequestGeneration || 0) + 1;
+        window.PcapSupport?.setHistoryState('loading');
         try {
-            const response = await fetch('/api/history');
+            const response = await fetch('/api/history', {signal: AbortSignal.timeout(15000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-
-            this.displayHistory(data.history || []);
+            if (!Array.isArray(data.history)) throw new Error('Historique invalide');
+            if (generation !== this.historyRequestGeneration) return;
+            this.displayHistory(data.history);
+            window.PcapSupport?.setHistoryState('ready');
         } catch (error) {
+            if (generation !== this.historyRequestGeneration) return;
             console.error('Load history error:', error);
+            window.PcapSupport?.setHistoryState('error', 'Actualisation impossible. Les dernières données restent affichées ; réessayez.');
         }
     }
 
     displayHistory(history) {
-        const tbody = document.querySelector('#historyTable tbody');
-        const emptyState = document.getElementById('historyEmpty');
-
-        if (!history.length) {
-            if (tbody) tbody.innerHTML = '';
-            if (emptyState) emptyState.style.display = 'block';
-            return;
-        }
-
-        if (emptyState) emptyState.style.display = 'none';
-
-        if (tbody) {
-            tbody.innerHTML = history.map(item => `
-                <tr>
-                    <td>${this.escapeHtml(item.filename || '-')}</td>
-                    <td>${item.timestamp ? new Date(item.timestamp).toLocaleString('fr-FR') : '-'}</td>
-                    <td>${this.formatNumber(item.total_packets || 0)}</td>
-                    <td>${item.anomalies_count || 0}</td>
-                    <td><span class="risk-badge ${this.sanitizeClassToken(item.risk_level || 'NONE')}">${this.escapeHtml(item.risk_level || 'NONE')}</span></td>
-                    <td>
-                        <button class="action-btn view" onclick='analyzer.loadHistoryItem(${JSON.stringify(item.task_id || "")})'>👁️</button>
-                        <button class="action-btn delete" onclick='analyzer.deleteHistoryItem(${JSON.stringify(item.task_id || "")})'>🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
+        window.PcapSupport?.renderHistory(history, this);
     }
 
     async loadHistoryItem(taskId) {
-        this.currentTaskId = taskId;
-        this.renderSignatures = { dns: '', http: '' };
-        this.streamsLoadedKey = '';
-        this.packetsLoadedTaskId = '';
-        this.streamsData = [];
-        this.allPackets = [];
-        this.filteredPackets = [];
-        this.packetIndex = { byProto: {}, byIp: {} };
-        this.showToast('info', 'Chargement', 'Récupération de l\'analyse...');
-
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(String(taskId || ''))) return false;
+        const captureGeneration = this.captureRequestGeneration || 0;
+        const generation = this.navigationRequestGeneration = (this.navigationRequestGeneration || 0) + 1;
+        const stale = () => generation !== this.navigationRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0);
+        this.showToast('info', 'Chargement', 'Récupération de l’analyse…');
         try {
-            const response = await fetch(`/api/analysis/${taskId}`);
+            const response = await fetch(`/api/analysis/${taskId}`, {signal: AbortSignal.timeout(30000)});
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
-
+            if (stale()) return false;
+            this.captureRequestGeneration = captureGeneration + 1;
+            this.pollGeneration = (this.pollGeneration || 0) + 1;
+            if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
+            this.currentTaskId = taskId;
             this.currentResults = results;
-
+            this.renderSignatures = { dns: '', http: '' };
+            this.streamsLoadedKey = '';
+            this.packetsLoadedTaskId = '';
+            this.streamsData = [];
+            this.allPackets = [];
+            this.filteredPackets = [];
+            this.packetIndex = { byProto: {}, byIp: {} };
             document.getElementById('uploadSection').style.display = 'none';
             document.getElementById('resultsSection').style.display = 'block';
-
             this.displayResults(results);
             this.triggerTabDataLoad(this.currentTabId);
             document.getElementById('resultsSection').scrollIntoView({block:'start',behavior:'auto'});
-
-            // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);
             return true;
-
         } catch (error) {
+            if (stale()) return false;
             console.error('Load history item error:', error);
-            this.showToast('error', 'Erreur', 'Impossible de charger l\'analyse');
+            this.showToast('error', 'Chargement impossible', 'La capture actuelle est conservée. Réessayez dans un instant.');
             return false;
         }
     }
@@ -7268,7 +7289,8 @@ Réponds STRICTEMENT en JSON:
         if (!confirm('Supprimer cette analyse ?')) return;
 
         try {
-            await fetch(`/api/delete/${taskId}`, { method: 'DELETE' });
+            const response = await fetch(`/api/delete/${taskId}`, { method: 'DELETE', signal: AbortSignal.timeout(15000) });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             this.showToast('success', 'Supprimé', 'Analyse supprimée');
             this.loadHistory();
         } catch (error) {
@@ -7746,6 +7768,8 @@ Réponds STRICTEMENT en JSON:
     }
 
     resetAnalysis() {
+        this.captureRequestGeneration = (this.captureRequestGeneration || 0) + 1;
+        this.pollGeneration = (this.pollGeneration || 0) + 1;
         // Arrêter le polling de statut avant de perdre le task_id
         if (this.pollInterval) {
             clearInterval(this.pollInterval);

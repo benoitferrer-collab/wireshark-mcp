@@ -23,9 +23,10 @@ def build(output: Path):
         raise ValueError('Invalid build output directory')
     output.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ROOT / 'static', output / 'static', dirs_exist_ok=True)
-    replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3'}
+    replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3', 'max_file_size_label': '3 Go'}
     for name, filename in {
         'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
+        'support_css': 'css/support-workspace.css', 'support_js': 'js/support-workspace.js',
         'engineering_css': 'css/engineering.css', 'engineering_js': 'js/engineering-ui.js',
         'evidence_js': 'js/evidence-links.js',
         'nomios_css': 'css/nomios.css', 'identity_ui_js': 'js/identity-ui.js',

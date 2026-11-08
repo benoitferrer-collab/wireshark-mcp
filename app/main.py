@@ -156,6 +156,8 @@ async def root(request: Request):
     assets_version = {
         "tls_js": _asset_version("js", "tls-decryption.js"),
         "tls_css": _asset_version("css", "tls-decryption.css"),
+        "support_css": _asset_version("css", "support-workspace.css"),
+        "support_js": _asset_version("js", "support-workspace.js"),
         "engineering_css": _asset_version("css", "engineering.css"),
         "engineering_js": _asset_version("js", "engineering-ui.js"),
         "evidence_js": _asset_version("js", "evidence-links.js"),
@@ -174,7 +176,8 @@ async def root(request: Request):
             "app_name": settings.app_name,
             "version": settings.app_version,
             "assets_version": assets_version,
-            "max_file_size_gb": settings.max_file_size / (1024**3)
+            "max_file_size_gb": settings.max_file_size / (1024**3),
+            "max_file_size_label": f"{settings.max_file_size / (1024**2):g} Mo" if settings.max_file_size < 1024**3 else f"{settings.max_file_size / (1024**3):g} Go"
         }
     )
 

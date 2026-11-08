@@ -1520,11 +1520,11 @@ def export_analysis(task_id: str, format: str):
 
 
 @router.get("/history")
-async def get_analysis_history(limit: int = 50):
+async def get_analysis_history(limit: Optional[int] = Query(default=None, ge=1, le=10000)):
     """
     Récupère l'historique des analyses
     
-    - **limit**: Nombre maximum de résultats (défaut: 50)
+    - **limit**: Nombre maximum de résultats, ou tous les résumés si absent.
     """
     history = storage_service.get_analysis_history(limit=limit)
     return {"history": history, "total": len(history)}
