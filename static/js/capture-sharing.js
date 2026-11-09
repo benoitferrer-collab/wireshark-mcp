@@ -1,0 +1,5 @@
+(()=>{'use strict';const $=id=>document.getElementById(id);let previous;
+ $('supportShare')?.addEventListener('click',()=>{try{if(typeof analyzer==='undefined'||!analyzer.currentResults)throw new Error('Ouvrez une capture.');$('captureShareUrl').value=window.PcapActivity.shareLink(location.origin,analyzer.currentTaskId,analyzer.currentTabId);$('captureShareStatus').textContent='';previous=document.activeElement;$('captureShare').showModal();}catch(error){if(typeof analyzer!=='undefined')analyzer.showToast('info','Partager une capture',error.message);}});
+ $('captureShareClose')?.addEventListener('click',()=>$('captureShare').close());$('captureShare')?.addEventListener('close',()=>previous?.focus());
+ $('captureShareCopy')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('captureShareUrl').value);$('captureShareStatus').textContent='Lien copié. Partagez-le avec votre collègue autorisé.';}catch(_){$('captureShareUrl').focus();$('captureShareUrl').select();$('captureShareStatus').textContent='Utilisez Ctrl/Cmd + C pour copier le lien sélectionné.';}});
+})();

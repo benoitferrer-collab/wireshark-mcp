@@ -94,7 +94,7 @@ class IdentityStore:
         today=int(now//86400)*86400
         with self.connect() as db:
             rows=db.execute('SELECT client_id, COUNT(*) AS calls_30d, SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) AS errors_30d, SUM(CASE WHEN occurred>=? THEN 1 ELSE 0 END) AS calls_today, MAX(occurred) AS last_call, MAX(CASE WHEN success=1 THEN occurred ELSE NULL END) AS last_success FROM mcp_activity WHERE occurred>=? GROUP BY client_id',(today,now-30*86400)).fetchall()
-            recent=db.execute('SELECT client_id, tool, success, duration_ms, occurred FROM mcp_activity WHERE occurred>=? ORDER BY occurred DESC LIMIT 50',(now-30*86400,)).fetchall()
+            recent=db.execute('SELECT id AS event_id, client_id, tool, success, duration_ms, occurred FROM mcp_activity WHERE occurred>=? ORDER BY occurred DESC, id DESC LIMIT 50',(now-30*86400,)).fetchall()
             first=db.execute('SELECT MIN(occurred) AS started FROM mcp_activity').fetchone()['started']
         return {'clients':[dict(row) for row in rows], 'recent':[dict(row) for row in recent], 'collection_started':first, 'timezone':'UTC', 'recent_window_seconds':900}
 

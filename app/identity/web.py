@@ -5,9 +5,11 @@ import os
 import logging
 import secrets
 import time
+import threading
+import re
 from http.cookies import SimpleCookie
 from uuid import UUID
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qs
 import httpx
 import jwt
 from fastapi import APIRouter, HTTPException, Request
@@ -19,6 +21,15 @@ SESSION='nomios_session'
 FLOW='nomios_flow'
 SESSION_SECONDS=8*3600
 logger=logging.getLogger(__name__)
+
+SHARE_TABS={'overview','streams','packets','dns','http','timeline','tcp-health','qos','tls-audit','threat-intel','flow-behavior','lateral-movement','playbook','team-ia'}
+def share_return(query):
+    task=query.get('task','')
+    if not isinstance(task,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',task):return '', '/'
+    view=query.get('view','overview')
+    if view not in SHARE_TABS:view='overview'
+    args=urlencode({'task':task,'view':view})
+    return args,'/?'+args+'#tab='+view
 
 class EntraProvider:
     def __init__(self, settings):
@@ -118,7 +129,8 @@ class WebIdentityMiddleware:
             return await response(scope,receive,send)
         if not session:
             status=403 if session_id else 401
-            response=JSONResponse({'detail':'Connexion ou appartenance au groupe requise'},status,headers={'Cache-Control':'no-store'}) if path.startswith('/api/') else RedirectResponse('/auth/login',303)
+            return_args,_=share_return({k:v[0] for k,v in parse_qs(scope.get('query_string',b'').decode('utf-8','replace')).items()}) if path=='/' else ('','/')
+            response=JSONResponse({'detail':'Connexion ou appartenance au groupe requise'},status,headers={'Cache-Control':'no-store'}) if path.startswith('/api/') else RedirectResponse('/auth/login'+('?' + return_args if return_args else ''),303)
             return await response(scope,receive,send)
         if path.startswith('/api/identity/internal/'):
             return await JSONResponse({'detail':'Accès serveur requis'},403)(scope,receive,send)
@@ -161,17 +173,20 @@ def create_identity_router(settings, store, provider, maintenance_hook=None):
         return session
 
     @router.get('/auth/login', response_class=HTMLResponse)
-    def login_landing():
+    def login_landing(request:Request):
         from pathlib import Path
         page=Path(__file__).resolve().parents[2]/'templates'/'login.html'
-        return HTMLResponse(page.read_text(),headers={'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
+        args,_=share_return(dict(request.query_params))
+        html=page.read_text().replace('/auth/start','/auth/start'+('?' + args.replace('&','&amp;') if args else ''))
+        return HTMLResponse(html,headers={'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"})
 
     @router.get('/auth/start')
-    def login():
+    def login(request:Request):
+        _,return_to=share_return(dict(request.query_params))
         flow=provider.begin()
         if 'auth_uri' not in flow: raise HTTPException(503,'Connexion Microsoft indisponible')
         key=secrets.token_urlsafe(32)
-        store.save_session(key,{'flow':flow},time.time()+600)
+        store.save_session(key,{'flow':flow,'return_to':return_to},time.time()+600)
         response=RedirectResponse(flow['auth_uri'],303,headers={'Cache-Control':'no-store'})
         response.set_cookie(FLOW,key,max_age=600,secure=True,httponly=True,samesite='lax',path='/auth')
         return response
@@ -194,7 +209,7 @@ def create_identity_router(settings, store, provider, maintenance_hook=None):
         store.save_session(session_id,session,session['session_expires'])
         previous=request.cookies.get(SESSION)
         if previous: store.delete_session(previous)
-        response=RedirectResponse('/',303,headers={'Cache-Control':'no-store'})
+        response=RedirectResponse(flow.get('return_to','/'),303,headers={'Cache-Control':'no-store'})
         response.set_cookie(SESSION,session_id,max_age=SESSION_SECONDS,secure=True,httponly=True,samesite='lax',path='/')
         response.delete_cookie(FLOW,path='/auth',secure=True,httponly=True,samesite='lax')
         return response
@@ -221,19 +236,27 @@ def create_identity_router(settings, store, provider, maintenance_hook=None):
         try: return store.set_group(body.group_id.strip(),session['oid'])
         except ValueError: raise HTTPException(422,'Object ID de groupe invalide') from None
 
+    health_cache={'at':None,'state':'unavailable'}
+    health_lock=threading.Lock()
     @router.get('/api/identity/activity')
     def activity(request:Request):
+        from app.identity.clients import client_registry
         identity(request)
         store.prune()
         result=store.activity()
-        result['endpoint']=settings.origin+'/mcp'
-        try:
-            with httpx.Client(timeout=4,follow_redirects=False) as client:
-                probe=client.get(settings.origin+'/mcp/activity-health',headers={'Authorization':'Bearer '+settings.api_token})
-                probe.raise_for_status()
-                result['collection_state']=probe.json().get('state','unavailable')
-        except Exception: result['collection_state']='unavailable'
-        return result
+        result.update(endpoint=settings.origin+'/mcp',client_registry=client_registry(),observed_at=time.time(),refresh_interval_seconds=5)
+        with health_lock:
+            now=time.monotonic()
+            if health_cache['at'] is None or now-health_cache['at']>=30:
+                try:
+                    with httpx.Client(timeout=4,follow_redirects=False) as client:
+                        probe=client.get(settings.origin+'/mcp/activity-health',headers={'Authorization':'Bearer '+settings.api_token})
+                        probe.raise_for_status()
+                        health_cache['state']=probe.json().get('state','unavailable')
+                except Exception:health_cache['state']='unavailable'
+                health_cache['at']=time.monotonic()
+            result['collection_state']=health_cache['state']
+        return JSONResponse(result,headers={'Cache-Control':'no-store'})
 
     @router.post('/api/identity/internal/authorize-upload')
     def authorize_upload(request:Request,body:dict):

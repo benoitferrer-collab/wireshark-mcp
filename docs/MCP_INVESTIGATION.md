@@ -75,3 +75,11 @@ Les instructions du serveur demandent : conclusion, faits observés, preuves cli
 - Les métadonnées TLS déchiffrées restent accessibles séparément via `get_tls_decryption`, lorsque le worker TLS a effectivement produit un rapport. L'ajout du moteur de recherche ne résout pas les travaux TLS en attente.
 
 Référence de la syntaxe moteur : [manuel officiel TShark](https://www.wireshark.org/docs/man-pages/tshark.html).
+
+## Activité des assistants et second avis
+
+Assistants IA affiche les appels d’outils terminés, actualisés toutes les5secondes lorsque cette vue est visible. Pause suspend les lectures automatiques. Les prompts, arguments et données PCAP ne sont pas enregistrés dans ce flux. L’activité récente ne prouve pas une session ouverte ; une passerelle LiteLLM ne permet pas d’identifier le modèle derrière elle.
+
+Les clients OAuth connus sont associés explicitement à leur marque. Pour ajouter ChatGPT ou renommer un client, définir côté serveur Web `MCP_CLIENT_BRANDING` : `{"client-id":{"provider":"chatgpt","name":"ChatGPT Support"}}`. Providers acceptés : claude, chatgpt, litellm, generic. Ce réglage ne crée ni client OAuth ni autorisation.
+
+Le bouton Partager la capture copie un lien vers la capture et sa vue. Le destinataire doit appartenir au groupe Azure déjà autorisé. Se connecter d’abord puis rouvrir le lien si nécessaire. Ce lien n’accorde aucun droit, ne limite pas l’accès aux autres captures de l’espace et n’envoie aucun message.

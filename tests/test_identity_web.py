@@ -154,3 +154,15 @@ def test_scheduled_purge_requires_dedicated_credential(env,monkeypatch):
     assert client.get('/api/identity/maintenance',headers={'Authorization':'Bearer cron-secret'}).status_code==200
     with store.connect() as db:
         assert db.execute('SELECT COUNT(*) AS n FROM web_sessions').fetchone()['n']==0
+
+def test_shared_capture_survives_login_without_open_redirect(env):
+    client,store,provider,settings=env
+    target=client.get('/?task=abc&view=dns').headers['location']
+    assert target=='/auth/login?task=abc&view=dns'
+    assert '/auth/start?task=abc&amp;view=dns' in client.get(target).text
+    client.get('/auth/start?task=abc&view=dns')
+    response=client.get('/auth/callback?state=state&code=test')
+    assert response.headers['location']=='/?task=abc&view=dns#tab=dns'
+    from app.identity.web import share_return
+    assert share_return({'task':'https://evil.test','view':'dns'})==('', '/')
+    assert share_return({'task':'abc','view':'https://evil.test'})[1].endswith('#tab=overview')

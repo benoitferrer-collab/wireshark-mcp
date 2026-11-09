@@ -49,34 +49,35 @@
   else if(results.style.display!=='none'&&controller())controller().switchTab(module);
   else {$('uploadSection').scrollIntoView({behavior:'smooth'});controller()?.showToast?.('info','Ouvrir une analyse','Sélectionnez une capture dans l’historique pour explorer ce module.');}
  }));
- function addCard(id, stats){
-  const label=names[id]||'Client MCP';
-  const card=element('article',undefined,'card nomios-assistant-card');
-  card.append(element('div',label==='Claude'?'Anthropic':label==='ChatGPT'?'OpenAI':'Client autorisé','provider'),element('h3',label));
+ let registry={},seen=new Set(),initialized=false,paused=false;
+ function logo(info){const box=element('span',undefined,'assistant-logo '+info.provider);if(info.logo){const img=element('img');img.src='/static/img/assistants/'+info.logo;img.alt=info.name;box.append(img);}else box.textContent='MCP';return box;}
+ function addCard(id,stats){
+  const info=window.PcapActivity.brand(id,registry),card=element('article',undefined,'card nomios-assistant-card');
+  card.append(logo(info),element('div',info.vendor,'provider'),element('h3',info.name));
   const recent=stats&&Date.now()/1000-stats.last_call<900;
-  card.append(element('span',recent?'Activité récente':stats?'Aucune activité récente':'Aucun appel enregistré','activity-state'+(recent?' recent':'')));
-  const counts=element('div',undefined,'nomios-counts');
-  for(const [count,caption] of [[stats?.calls_today??'—',"Appels aujourd’hui · UTC"],[stats?.calls_30d??'—','Appels sur 30 jours']]){const block=element('div');block.append(element('strong',String(count)),element('small',caption));counts.append(block);}
-  card.append(counts,element('p','Dernier appel : '+date(stats?.last_call)),element('p','Dernière réussite : '+date(stats?.last_success)));
-  card.append(element('p',stats?`${stats.calls_30d-stats.errors_30d} réussites · ${stats.errors_30d} erreurs sur 30 jours`:'Le compteur démarrera au premier appel enregistré.'));
-  if(!names[id])card.append(element('p','Identifiant client : '+id));
+  card.append(element('span',recent?'Appel récent':stats?'Aucune activité récente':'Aucun appel enregistré','activity-state'+(recent?' recent':'')));
+  const counts=element('div',undefined,'nomios-counts');for(const [value,label] of [[stats?.calls_today??'—','Appels aujourd’hui · UTC'],[stats?.errors_30d??'—','Erreurs · 30 jours']]){const block=element('div');block.append(element('strong',String(value)),element('small',label));counts.append(block);}card.append(counts,element('p','Dernier appel : '+date(stats?.last_call)),element('small','Client OAuth : '+id));
+  if(info.provider==='litellm')card.append(element('p','Le modèle derrière la passerelle n’est pas identifié par ces événements.'));
   $('nomiosAssistantCards').append(card);
  }
  async function loadActivity(){
-  if(loading)return;loading=true;
-  $('nomiosMcpEndpoint').textContent=location.origin+'/mcp';
-  try {
-   if(!window.PCAP_CONFIG?.webAuth)throw new Error('Le suivi sera disponible après activation de la connexion Microsoft et du stockage partagé.');
-   const data=await json('/api/identity/activity');
+  if(loading)return;loading=true;$('nomiosMcpEndpoint').textContent=location.origin+'/mcp';
+  try{
+   if(!window.PCAP_CONFIG?.webAuth)throw new Error('Le suivi réel nécessite Microsoft Entra ID et le stockage partagé.');
+   const response=await fetch('/api/identity/activity',{cache:'no-store',signal:AbortSignal.timeout(12000)});if(!response.ok)throw new Error('Actualisation indisponible. Les derniers événements restent affichés.');
+   const data=await response.json();registry=data.client_registry||{};
+   const newEvents=window.PcapActivity.freshEvents(data.recent,seen);const highlights=initialized?new Set(newEvents.map(e=>e.event_id)):new Set();
+   seen=new Set(data.recent.map(e=>e.event_id));initialized=true;
    $('nomiosAssistantCards').replaceChildren();$('nomiosActivityRows').replaceChildren();
-   const clients=new Map(data.clients.map(client=>[client.client_id,client]));
-   for(const id of new Set([...Object.keys(names),...clients.keys()]))addCard(id,clients.get(id));
-   const chat=element('article',undefined,'card nomios-assistant-card');chat.append(element('div','OpenAI','provider'),element('h3','ChatGPT'),element('span','À configurer','activity-state'),element('p','Ajoutez un client OAuth dédié avant de connecter cet assistant.'));$('nomiosAssistantCards').append(chat);
-   for(const event of data.recent){const row=element('tr');for(const value of [date(event.occurred),names[event.client_id]||event.client_id,event.tool,event.success?'Réussi':'Erreur',event.duration_ms+' ms'])row.append(element('td',value));$('nomiosActivityRows').append(row);}
-   $('nomiosActivityMessage').textContent=data.collection_state!=='available' ? (data.collection_state==='disabled'?'La collecte MCP est désactivée. Les chiffres affichés sont les derniers enregistrements disponibles.':'Collecte MCP indisponible. Les derniers chiffres peuvent être incomplets ; aucune déconnexion ne peut être déduite.') : data.collection_started?'Historique disponible depuis le '+date(data.collection_started)+'. Actualisation toutes les 30 secondes.':'Aucun appel enregistré depuis l’activation du suivi. Les appels antérieurs ne sont pas reconstitués.';
-  }catch(error){$('nomiosActivityMessage').textContent=error.message;$('nomiosAssistantCards').replaceChildren();$('nomiosActivityRows').replaceChildren();}
+   const clients=new Map(data.clients.map(client=>[client.client_id,client]));for(const id of new Set([...Object.keys(registry),...clients.keys()]))addCard(id,clients.get(id));
+   for(const event of data.recent){const info=window.PcapActivity.brand(event.client_id,registry),row=element('tr');if(highlights.has(event.event_id))row.className='activity-new';const who=element('td');who.append(logo(info),element('span',info.name));row.append(element('td',date(event.occurred)),who);for(const value of [event.tool,event.success?'Réussi':'Erreur',event.duration_ms+' ms'])row.append(element('td',value));$('nomiosActivityRows').append(row);}
+   if(!data.recent.length){const row=element('tr'),cell=element('td','Aucun appel enregistré. Lancez une recherche depuis votre assistant connecté.');cell.colSpan=5;row.append(cell);$('nomiosActivityRows').append(row);}
+   $('nomiosActivityMessage').textContent=data.collection_state==='available'?'Flux des appels terminés · actualisation toutes les 5 secondes.':data.collection_state==='disabled'?'Collecte désactivée : les derniers enregistrements ne prouvent pas une connexion actuelle.':'Collecte indisponible : les chiffres peuvent être incomplets.';
+   $('activityLastRefresh').textContent='Dernière actualisation : '+new Date().toLocaleTimeString('fr-FR');
+  }catch(error){$('nomiosActivityMessage').textContent=error.message;}
   finally{loading=false;}
  }
+ $('activityPause')?.addEventListener('click',()=>{paused=!paused;$('activityPause').textContent=paused?'Reprendre le flux':'Mettre en pause';$('activityPause').setAttribute('aria-pressed',String(paused));if(!paused)loadActivity();});
  async function loadGroup(){
   if(!user?.is_admin){$('nomiosGroupMessage').textContent='Administration réservée au propriétaire.';return;}
   $('nomiosTenant').value=user.tenant_id;
@@ -91,8 +92,8 @@
  async function logout(){try{await json('/api/identity/logout',{method:'POST'});location.assign('/auth/login');}catch(error){window.alert(error.message);}}
  $('nomiosLogout').addEventListener('click',logout);
  $('nomiosRefreshActivity').addEventListener('click',loadActivity);
- setInterval(()=>{if(activeView==='assistants'&&!document.hidden)loadActivity();},30000);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='assistants')loadActivity();});
+ setInterval(()=>{if(activeView==='assistants'&&!document.hidden&&!paused)loadActivity();},5000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&activeView==='assistants'&&!paused)loadActivity();});
  if(!controller()?.currentResults)view('captures');
  if(window.PCAP_IDENTITY_READY)window.PCAP_IDENTITY_READY.then(identity=>{
   user=identity;$('nomiosUserName').textContent=identity.name;$('nomiosUserStatus').textContent='Microsoft Entra ID';$('nomiosLogout').hidden=false;$('nomiosAdminNav').hidden=!identity.is_admin;

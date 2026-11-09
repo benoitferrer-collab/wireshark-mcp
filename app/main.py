@@ -158,6 +158,8 @@ async def root(request: Request):
     assets_version = {
         "tls_js": _asset_version("js", "tls-decryption.js"),
         "tls_css": _asset_version("css", "tls-decryption.css"),
+        "activity_js": _asset_version("js", "activity-model.js"),
+        "sharing_js": _asset_version("js", "capture-sharing.js"),
         "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),
         "support_js": _asset_version("js", "support-workspace.js"),
