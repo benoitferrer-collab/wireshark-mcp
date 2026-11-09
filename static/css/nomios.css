@@ -337,3 +337,25 @@ button:focus-visible,a:focus-visible,summary:focus-visible { outline:2px solid v
 @media(max-width:1100px) { .ai-engine-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .ai-engine-grid { grid-template-columns:1fr; }.ai-engine-panel,.ai-handoff { padding:18px; } }
 [data-theme=dark] .ai-engine-option img,[data-theme=dark] .ai-engine-mark img { filter:invert(1); }
+
+/* Support runbooks keep evidence, decision and completion easy to scan. */
+.playbook-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+.playbook-actions label { color:var(--text-muted);font-size:12px; }
+.playbook-actions select { max-width:min(420px,100%);padding:10px;border-radius:8px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color); }
+.pb-card { margin:24px 0;border:1px solid var(--border-color);border-radius:16px;overflow:hidden;background:var(--bg-card); }
+.pb-header { padding:26px;background:linear-gradient(115deg,rgba(50,120,250,.10),transparent); }
+.pb-type-badge { font-size:10px;letter-spacing:1.5px;color:var(--primary); }
+.pb-title { font-size:24px;margin:12px 0; }
+.pb-header p,.pb-context { color:var(--text-muted);font-size:13px;line-height:1.8; }
+.pb-context { margin:0;padding:16px 26px;border-block:1px solid var(--border-color); }
+.pb-phase { padding:18px 26px; }
+.pb-phase-title { font-size:16px;margin:6px 0 14px; }
+.pb-task { display:flex;align-items:flex-start;gap:12px;padding:11px 0;font-size:13px;line-height:1.8;cursor:pointer; }
+.pb-task input { margin-top:6px;flex-shrink:0;accent-color:var(--primary); }
+.pb-task:has(input:checked) .pb-task-text { opacity:.65; }
+.pb-progress-wrap { display:flex;align-items:center;gap:12px;margin-top:20px; }
+.pb-progress-bar { height:5px;flex:1;max-width:260px;background:var(--border-color);border-radius:8px;overflow:hidden; }
+.pb-progress-fill { height:100%;background:var(--primary); }
+.pb-progress-text,.pb-footer { font-size:11px;color:var(--text-muted); }
+.pb-footer { padding:18px 26px;border-top:1px solid var(--border-color); }
+@media(max-width:600px) { .pb-header,.pb-context,.pb-phase,.pb-footer { padding:18px; }.pb-title { font-size:20px; }.playbook-actions { align-items:stretch;flex-direction:column; } }

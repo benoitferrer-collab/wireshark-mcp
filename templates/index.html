@@ -1900,20 +1900,20 @@
                 <div class="tab-content" id="tab-playbook">
                     <div class="section-header">
                         <div>
-                            <h2>📋 IR Playbook Interactif</h2>
-                            <p>Playbooks de réponse à incident personnalisés basés sur les menaces détectées</p>
+                            <h2>Parcours de résolution · Support Nomios</h2>
+                            <p>14 parcours réseau et cybersécurité · checklists proposées, sans action automatique</p>
                         </div>
-                        <div class="playbook-actions">
+                        <div class="playbook-actions"><label for="playbookScenario">Parcours</label><select id="playbookScenario" class="filter-select"><option value="auto">Suggérer à partir de la capture</option></select>
                             <button class="btn btn-primary" id="generatePlaybookBtn"
-                                onclick="analyzer.generatePlaybook()">
-                                🚀 Générer les Playbooks
+                                onclick="generatePlaybook(analyzer.currentTaskId)">
+                                Préparer les checklists
                             </button>
                         </div>
                     </div>
                     <div class="adv-loading" id="playbook-loading" style="display:none">
                         <div class="spinner"></div><span>Génération des playbooks IR...</span>
                     </div>
-                    <div id="playbook-content"></div>
+                    <p id="playbookCatalogStatus" role="status">Catalogue en cours de chargement…</p><p class="nomios-footnote">Suggestions fondées sur les résultats enregistrés ; choisissez manuellement un parcours si le module concerné n’a pas été enregistré. Une suggestion est une piste à qualifier, pas un incident confirmé. Les changements réseau ou sécurité nécessitent la validation du client. La progression reste dans ce navigateur, par capture et parcours.</p><div id="playbook-content"></div>
                 </div>
 
                 <!-- ========== (End of advanced tab panels) ========== -->
