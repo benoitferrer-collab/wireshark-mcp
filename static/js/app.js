@@ -3261,6 +3261,22 @@ Réponds STRICTEMENT en JSON:
         }
     }
 
+    renderStreamContent(data) {
+        const render=(value,label,kind)=>{
+            const block=value&&typeof value==='object'?value:{};
+            const text=block.is_binary?block.hex:block.raw;
+            const size=Number(block.size||0);
+            const preview=String(text||'').slice(0,65536);
+            return `<section class="stream-segment ${kind}"><div class="stream-segment-header"><strong>${label}</strong><span>${this.escapeHtml(String(size))} octets${block.is_binary?' · hexadécimal':''}</span></div><pre>${this.escapeHtml(preview||(size?'Données non disponibles dans cette réponse.':'Sans donnée applicative dans ce sens.'))}</pre>${block.truncated||String(text||'').length>65536?'<small>Aperçu tronqué.</small>':''}</section>`;
+        };
+        if(data.client_data||data.server_data){
+            const packets=Array.isArray(data.packets)?data.packets:[];
+            return `<h4 class="stream-content-heading">Données reconstituées · client / serveur</h4>${render(data.client_data,'Client → serveur','client')}${render(data.server_data,'Serveur → client','server')}<p class="support-evidence-note">Le texte provient du PCAP original. SYN, ACK, FIN et RST peuvent ne contenir aucune donnée applicative. Le contenu TLS chiffré reste illisible sans secrets compatibles.</p><details class="stream-packet-details"><summary>Chronologie TCP · ${packets.length} paquets affichés</summary><div class="table-wrapper"><table><thead><tr><th>Paquet</th><th>Sens</th><th>Flags</th><th>Données</th></tr></thead><tbody>${packets.map(pkt=>`<tr><td>Paquet ${this.escapeHtml(String(Number(pkt.idx)+1))}</td><td>${pkt.direction==='client'?'Client → serveur':'Serveur → client'}</td><td>${this.escapeHtml(String(pkt.flags||'—'))}</td><td>${this.escapeHtml(String(pkt.payload_size??0))} octets${!pkt.payload_size?' · Sans donnée applicative':''}</td></tr>`).join('')}</tbody></table></div></details>`;
+        }
+        const packets=Array.isArray(data.packets)?data.packets:[];
+        return packets.length?packets.map(pkt=>{const size=Number(pkt.payload_len??pkt.payload_size??0);return `<div class="stream-segment ${pkt.direction==='client_to_server'||pkt.direction==='client'?'client':'server'}"><div class="stream-segment-header">${this.escapeHtml(String(pkt.flags||'—'))} · ${size} octets</div><pre>${this.escapeHtml(String(pkt.payload||pkt.data||(size?'Données non disponibles dans cette réponse.':'Sans donnée applicative · contrôle TCP.')))}</pre></div>`;}).join(''):'<p>Aucun paquet extrait. Vérifiez la disponibilité du PCAP original.</p>';
+    }
+
     async showStreamDetails(streamId, streamIdentifier = '', isCurrent = () => true) {
         const taskId=this.currentTaskId, request=this.streamDetailRequest=(this.streamDetailRequest||0)+1;
         const stale=()=>!isCurrent()||taskId!==this.currentTaskId||request!==this.streamDetailRequest;
@@ -3313,7 +3329,7 @@ Réponds STRICTEMENT en JSON:
                     dst_port: data.dst_port,
                     packet_count: data.packet_count,
                     state: data.state || 'UNKNOWN',
-                    retransmissions: data.retransmissions || 0,
+                    retransmissions: data.retransmissions,
                     duration: data.duration,
                 };
                 const packets = Array.isArray(data.packets) ? data.packets : [];
@@ -3324,26 +3340,11 @@ Réponds STRICTEMENT en JSON:
                         <strong>Destination:</strong> ${this.escapeHtml(streamInfo.dst_ip || '?')}:${this.escapeHtml(streamInfo.dst_port || '?')}
                         <br><strong>Paquets:</strong> ${streamInfo.packet_count || packets.length || 0}
                         <strong>État:</strong> <span class="state-badge ${this.sanitizeClassToken(streamInfo.state || '')}">${this.escapeHtml(streamInfo.state || 'UNKNOWN')}</span>
-                        <strong>Retransmissions:</strong> ${streamInfo.retransmissions || 0}
-                        ${streamInfo.duration ? `<strong>Durée:</strong> ${this.escapeHtml(String(streamInfo.duration))}s` : ''}
+                        <strong>Retransmissions:</strong> ${this.escapeHtml(String(streamInfo.retransmissions ?? 'Non calculées'))}
+                        ${streamInfo.duration ? `<strong>Durée:</strong> ${Number.isFinite(Number(streamInfo.duration)) ? Number(streamInfo.duration).toFixed(3) : '—'} s` : ''}
                     </div>`;
 
-                if (packets.length > 0) {
-                    html += `<div class="stream-conversation">${packets.map(pkt => `
-                        <div class="stream-segment ${pkt.direction === 'client_to_server' || pkt.direction === 'client' ? 'client' : 'server'}">
-                            <div class="stream-segment-header">
-                                <span>${pkt.direction === 'client_to_server' || pkt.direction === 'client' ? '→ Client' : '← Server'}</span>
-                                <span>${this.escapeHtml(pkt.flags || '-')} | ${pkt.payload_len || pkt.payload_size || 0} bytes</span>
-                            </div>
-                            <pre>${this.escapeHtml(pkt.payload || pkt.data || '(payload non disponible)')}</pre>
-                        </div>
-                    `).join('')}</div>`;
-                } else {
-                    html += `<div style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
-                        <p>📦 Aucun paquet extrait pour ce stream.</p>
-                        <p style="font-size: 0.85rem;">Le fichier PCAP original peut ne plus être disponible sur le serveur.</p>
-                    </div>`;
-                }
+                html += this.renderStreamContent(data);
 
                 conversation.innerHTML = html;
             }

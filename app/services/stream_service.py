@@ -142,6 +142,14 @@ class StreamService:
                 "packets": [self._format_packet_info(p) for p in stream_packets[:500]],
             }
             
+            # Match the actual endpoints, never the position of a sorted session list.
+            sessions=(results or {}).get('tcp_analysis',{}).get('sessions',[])
+            source=f'{src_ip}:{src_port}'; destination=f'{dst_ip}:{dst_port}'
+            session=next((s for s in sessions if (s.get('src'),s.get('dst')) in ((source,destination),(destination,source))),{})
+            result['state']=session.get('state') or ('RST observé' if any('R' in p['flags'] for p in stream_packets) else 'FIN observé' if any('F' in p['flags'] for p in stream_packets) else 'Non déterminé')
+            result['retransmissions']=session.get('retransmissions')
+            result['rst_count']=sum('R' in p['flags'] for p in stream_packets)
+
             # Cache result (LRU borné)
             self._cache_put(cache_key, result)
             return result
@@ -299,6 +307,8 @@ class StreamService:
         }
         
         if is_binary:
+            result["truncated"] = truncated or len(data) > 4096
+            result["displayed_bytes"] = min(len(data), 4096)
             result["hex"] = self._format_hex_dump(display_data[:4096])
             result["raw"] = f"[Binary data: {len(data)} bytes]"
         else:
