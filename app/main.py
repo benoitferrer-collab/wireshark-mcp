@@ -159,6 +159,7 @@ async def root(request: Request):
         "tls_js": _asset_version("js", "tls-decryption.js"),
         "tls_css": _asset_version("css", "tls-decryption.css"),
         "activity_js": _asset_version("js", "activity-model.js"),
+        "engines_js": _asset_version("js", "ai-engines.js"),
         "sharing_js": _asset_version("js", "capture-sharing.js"),
         "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),

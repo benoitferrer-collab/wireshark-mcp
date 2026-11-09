@@ -293,7 +293,7 @@
                         <span class="ollama-dot" id="ollamaDot">●</span>
                         <span class="ollama-label" id="ollamaLabel">Ollama</span>
                     </div>
-                    <button class="ollama-config-btn" id="ollamaConfigBtn" title="Configurer Ollama">
+                    <button class="ollama-config-btn" id="ollamaConfigBtn" title="Choisir le moteur IA">
                         ⚙ IA
                     </button>
                     <div class="ollama-status" id="maclookupStatus" title="Statut MacLookup">
@@ -337,6 +337,7 @@
         <main class="main-content" id="contenu">
 <section id="nomiosAssistants" class="nomios-page" hidden aria-labelledby="nomiosAssistantsTitle">
 <div class="nomios-page-heading"><div><p class="nav-label">ASSISTANTS IA</p><h2 id="nomiosAssistantsTitle">Votre expertise, augmentée.</h2><p>Consultez l’activité réelle des assistants qui explorent vos analyses.</p></div><button class="btn btn-primary" id="nomiosRefreshActivity">Actualiser</button></div>
+<div id="aiEnginePanel" class="ai-engine-panel" aria-label="Moteur des boutons IA"></div>
 <div class="nomios-info"><span>↗</span><div><strong>Passerelle MCP</strong><code id="nomiosMcpEndpoint"></code><small>Lecture des analyses · authentification Microsoft Entra ID</small></div></div>
 <div class="activity-toolbar"><span class="activity-live">● Appels MCP</span><span id="activityLastRefresh">En attente d’actualisation</span><button type="button" id="activityPause" class="btn btn-secondary" aria-pressed="false">Mettre en pause</button></div><p id="nomiosActivityMessage" role="status">Chargement de l’activité…</p><div id="nomiosAssistantCards" class="nomios-assistant-grid"></div>
 <div class="card nomios-events"><h3>Derniers appels d’outils</h3><p>Les requêtes affichées sont des appels d’outils terminés, sans contenu des prompts ni arguments. Un appel d’outil MCP est une requête. Les messages dans Claude et les initialisations ne sont pas comptabilisés. Horaires UTC.</p><div class="table-wrapper"><table><thead><tr><th>Date UTC</th><th>Assistant</th><th>Outil</th><th>Résultat</th><th>Durée</th></tr></thead><tbody id="nomiosActivityRows"></tbody></table></div></div>
@@ -1024,7 +1025,7 @@
                 <div class="tab-content" id="tab-ai-insights">
                     <div class="ai-analysis-section">
                         <div class="ai-header">
-                            <h3>🤖 Analyse IA avec Ollama</h3>
+                            <h3>Investigation assistée</h3><button type="button" class="btn btn-secondary" onclick="PcapAI.openSettings()">Choisir le moteur IA</button>
                             <p class="ai-subtitle">Sélectionnez le type d'analyse que vous souhaitez effectuer</p>
                         </div>
 
@@ -2055,6 +2056,7 @@
         <script defer src="/static/js/app.js?v={{ assets_version.app_js }}"></script>
         <script defer src="/static/js/activity-model.js?v={{ assets_version.activity_js }}"></script>
 <script defer src="/static/js/capture-sharing.js?v={{ assets_version.sharing_js }}"></script>
+<script defer src="/static/js/ai-engines.js?v={{ assets_version.engines_js }}"></script>
 <script defer src="/static/js/identity-ui.js?v={{ assets_version.identity_ui_js }}"></script>
 <script defer src="/static/js/tls-decryption.js?v={{ assets_version.tls_js }}"></script>
 <script defer src="/static/js/demo-tour.js?v={{ assets_version.demo_js }}"></script>

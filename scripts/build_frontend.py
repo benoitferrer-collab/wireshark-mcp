@@ -26,6 +26,7 @@ def build(output: Path):
     replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3', 'max_file_size_label': '3 Go'}
     for name, filename in {
         'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
+        'engines_js': 'js/ai-engines.js',
         'activity_js': 'js/activity-model.js', 'sharing_js': 'js/capture-sharing.js',
         'demo_js': 'js/demo-tour.js',
         'support_css': 'css/support-workspace.css', 'support_js': 'js/support-workspace.js',

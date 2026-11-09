@@ -83,3 +83,24 @@ Assistants IA affiche les appels d’outils terminés, actualisés toutes les5se
 Les clients OAuth connus sont associés explicitement à leur marque. Pour ajouter ChatGPT ou renommer un client, définir côté serveur Web `MCP_CLIENT_BRANDING` : `{"client-id":{"provider":"chatgpt","name":"ChatGPT Support"}}`. Providers acceptés : claude, chatgpt, litellm, generic. Ce réglage ne crée ni client OAuth ni autorisation.
 
 Le bouton Partager la capture copie un lien vers la capture et sa vue. Le destinataire doit appartenir au groupe Azure déjà autorisé. Se connecter d’abord puis rouvrir le lien si nécessaire. Ce lien n’accorde aucun droit, ne limite pas l’accès aux autres captures de l’espace et n’envoie aucun message.
+
+### Choix du moteur des raccourcis IA
+
+Dans **Assistants IA → Moteurs IA**, chaque navigateur peut choisir Ollama,
+Claude, Codex ou ChatGPT. Cette préférence ne contient aucun identifiant de
+connexion et reste locale au navigateur. Les raccourcis d’analyse, les analyses
+spécifiques et Santé TCP respectent ce choix. Le chat intégré et Team IA restent
+sur Ollama.
+
+Ollama exécute les appels existants depuis le serveur de l’application. Une
+adresse de boucle locale sur Vercel ne pointe pas vers le poste de l’utilisateur.
+Les trois autres choix préparent une consigne à copier dans le client officiel,
+avec le task_id exact, le sujet et une demande d’investigation fondée sur les
+preuves. Aucun appel LLM ni transfert du contenu PCAP n’est lancé par cette
+préparation. Le client doit avoir son connecteur MCP et son accès Entra configurés.
+Les logos représentent le parcours sélectionné, jamais une preuve de connexion ;
+seule l’activité enregistrée sous le panneau montre les appels réellement reçus.
+
+L’intégration de réponses API directement dans la page n’est pas ajoutée par ce
+sélecteur. La rubrique LiteLLM/API l’indique explicitement. Aucun jeton d’abonnement
+Claude ou ChatGPT n’est récupéré ni enregistré dans l’application.

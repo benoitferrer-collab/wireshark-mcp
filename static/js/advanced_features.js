@@ -278,6 +278,7 @@ async function advAnalyzeTcpHealthWithAI(taskId) {
         advSetTcpHealthAiStatus('Aucune analyse en cours.', 'error');
         return;
     }
+    if (window.PcapAI?.handoff({currentTaskId: realTaskId, showToast: (...args) => window.analyzer?.showToast(...args)}, 'tcp-health')) return;
     if (_advTcpHealthAiPending.has(realTaskId)) return;
 
     const data = _advTcpHealthCache.get(realTaskId);

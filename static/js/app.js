@@ -1340,6 +1340,7 @@ Réponds STRICTEMENT en JSON:
     // ==================== AI ANALYSIS BUTTONS ====================
 
     async analyzeWithAI(context) {
+        if (window.PcapAI?.handoff(this, context)) return;
         if (!this.currentTaskId) {
             this.showToast('warning', 'Pas d\'analyse', 'Veuillez d\'abord analyser un fichier PCAP');
             return;
@@ -1424,7 +1425,7 @@ Réponds STRICTEMENT en JSON:
         // Ollama config menu
         const ollamaConfigBtn = document.getElementById('ollamaConfigBtn');
         if (ollamaConfigBtn) {
-            ollamaConfigBtn.addEventListener('click', () => this.openOllamaConfigMenu());
+            ollamaConfigBtn.addEventListener('click', () => window.PcapAI ? window.PcapAI.openSettings() : this.openOllamaConfigMenu());
         }
         const ollamaStatus = document.getElementById('ollamaStatus');
         if (ollamaStatus) {
@@ -2461,6 +2462,7 @@ Réponds STRICTEMENT en JSON:
     // ==================== AI INSIGHTS ====================
 
     async generateSpecificAI(type) {
+        if (window.PcapAI?.handoff(this, type)) return;
         if (!this.currentTaskId) {
             this.showToast('warning', 'Pas d\'analyse', 'Veuillez d\'abord analyser un fichier PCAP');
             return;
@@ -8050,7 +8052,7 @@ Réponds STRICTEMENT en JSON:
             const statusCls = data.available ? 'connected' : 'disconnected';
             const statusText = data.available
                 ? `Connecté (${models.length} modèle${models.length > 1 ? 's' : ''})`
-                : `Déconnecté${data.error ? `: ${data.error}` : ''}`;
+                : `Indisponible — aucun modèle joignable depuis le serveur de l’application`;
 
             const modelOptions = (models.length ? models : (model ? [model] : []))
                 .map(m => `<option value="${this.escapeHtml(m)}" ${m === model ? 'selected' : ''}>${this.escapeHtml(m)}</option>`)
@@ -8078,7 +8080,7 @@ Réponds STRICTEMENT en JSON:
                     </div>
                     <div class="ollama-config-actions">
                         <div class="ollama-config-help" id="ollamaConfigHelp">
-                            Renseigne l'IP/URL Ollama, teste la connexion, puis applique la config.
+                            Adresse accessible depuis le serveur de l’application. Sur Vercel, 127.0.0.1 ne désigne pas votre ordinateur. Testez la connexion avant d’appliquer.
                         </div>
                         <div style="display:flex;gap:0.5rem;">
                             <button class="btn btn-small" onclick="analyzer.refreshOllamaModels()">🔄 Tester</button>
@@ -8130,7 +8132,7 @@ Réponds STRICTEMENT en JSON:
             if (statusTextEl) {
                 statusTextEl.textContent = data.available
                     ? `Connecté (${models.length} modèle${models.length > 1 ? 's' : ''})`
-                    : `Déconnecté${data.error ? `: ${data.error}` : ''}`;
+                    : `Indisponible — aucun modèle joignable depuis le serveur de l’application`;
             }
             if (helpEl && data.available && models.length) {
                 helpEl.textContent = `Modèles détectés: ${models.slice(0, 4).join(', ')}${models.length > 4 ? '…' : ''}`;
