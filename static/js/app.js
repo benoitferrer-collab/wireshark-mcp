@@ -1980,6 +1980,8 @@ Réponds STRICTEMENT en JSON:
             this.setMenuHealthStatus('multi-pcap', this.multiPcapResults ? 'ok' : 'missing', this.multiPcapResults ? 'Résultats multi-PCAP disponibles' : 'Chargez plusieurs PCAP puis lancez la corrélation');
             this.renderMultiPcapCaptureTable();
             this.renderMultiPcapResults();
+        } else if (tabId.startsWith('protocol-') && this.currentTaskId) {
+            window.PcapSupportProtocols?.load(tabId, this.currentTaskId);
         } else if (tabId === 'transactions' && this.currentTaskId) {
             window.PcapTransactions?.load(this.currentTaskId);
         } else if (tabId === 'timeline' && this.currentResults) {
@@ -1992,6 +1994,7 @@ Réponds STRICTEMENT en JSON:
             } else {
                 this.setMenuHealthStatus('playbook', 'idle', 'Lancez la génération du playbook');
             }
+            if (tabId === 'tcp-health') window.PcapSupportProtocols?.health(this.currentTaskId);
             if (typeof advOnTabActivated === 'function') {
                 advOnTabActivated(tabId, this.currentTaskId);
             }

@@ -146,6 +146,8 @@ from app.demo import create_demo_router
 app.include_router(create_demo_router(storage_service))
 from app.services.transaction_service import create_transaction_router
 app.include_router(create_transaction_router(storage_service))
+from app.services.support_protocols import create_support_protocol_router
+app.include_router(create_support_protocol_router(storage_service))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -164,6 +166,8 @@ async def root(request: Request):
         "engines_js": _asset_version("js", "ai-engines.js"),
         "transactions_js": _asset_version("js", "transactions.js"),
         "transactions_css": _asset_version("css", "transactions.css"),
+        "protocols_js": _asset_version("js", "support-protocols.js"),
+        "protocols_css": _asset_version("css", "support-protocols.css"),
         "sharing_js": _asset_version("js", "capture-sharing.js"),
         "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),

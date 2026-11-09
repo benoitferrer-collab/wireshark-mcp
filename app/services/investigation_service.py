@@ -22,6 +22,10 @@ FIELDS = (
     'tls.handshake.extensions_server_name', 'http.host', 'http.request.method', 'http.response.code',
     'tcp.flags.syn', 'tcp.flags.ack', 'tcp.seq_raw', 'tcp.ack_raw', 'tcp.len',
     'tls.handshake.type', 'http.request_in', 'dns.response_to',
+    'tcp.analysis.zero_window', 'tcp.analysis.duplicate_ack', 'tcp.analysis.out_of_order',
+    'tcp.analysis.lost_segment', 'tcp.flags.fin', 'tcp.window_size_value',
+    'icmp.type', 'icmp.code', 'icmpv6.type', 'icmpv6.code', 'dhcp.option.dhcp',
+    'ntp.flags.mode', 'ntp.stratum', 'smb2.cmd', 'smb2.nt_status', 'quic.version',
 )
 PRESETS = {
     'tcp-failures': ('tcp.flags.reset == 1 || tcp.analysis.retransmission || tcp.analysis.lost_segment',
@@ -80,6 +84,15 @@ def _decode(values):
         'tls_handshake_types':[_number(v) for v in split('tls.handshake.type')],
         'http_request_frames':[_number(v) for v in split('http.request_in')],
         'dns_request_frame':_number(row.get('dns.response_to')),
+        'zero_window':bool(row.get('tcp.analysis.zero_window')),
+        'duplicate_ack':bool(row.get('tcp.analysis.duplicate_ack')),
+        'out_of_order':bool(row.get('tcp.analysis.out_of_order')),
+        'lost_segment':bool(row.get('tcp.analysis.lost_segment')),
+        'tcp_fin':any(v.lower() in {'1','true'} for v in split('tcp.flags.fin')),
+        'tcp_window':_number(row.get('tcp.window_size_value')),
+        'protocol_details':{key: row[key][:100] for key in (
+            'icmp.type', 'icmp.code', 'icmpv6.type', 'icmpv6.code', 'dhcp.option.dhcp',
+            'ntp.flags.mode', 'ntp.stratum', 'smb2.cmd', 'smb2.nt_status', 'quic.version') if row.get(key)},
     }
     result.update(src_ips=src_ips,dst_ips=dst_ips,dns_names=split('dns.qry.name'),
                   tls_server_names=split('tls.handshake.extensions_server_name'),http_hosts=split('http.host'),

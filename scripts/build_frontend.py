@@ -28,6 +28,7 @@ def build(output: Path):
         'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
         'engines_js': 'js/ai-engines.js',
         'transactions_js': 'js/transactions.js', 'transactions_css': 'css/transactions.css',
+        'protocols_js': 'js/support-protocols.js', 'protocols_css': 'css/support-protocols.css',
         'activity_js': 'js/activity-model.js', 'sharing_js': 'js/capture-sharing.js',
         'demo_js': 'js/demo-tour.js',
         'support_css': 'css/support-workspace.css', 'support_js': 'js/support-workspace.js',
