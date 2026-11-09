@@ -4437,9 +4437,9 @@ Réponds STRICTEMENT en JSON:
     /** Libellés FR explicites des classes de limitation de flux. */
     getFlowLimitationLabel(cls) {
         const labels = {
-            RECEIVER_LIMITED: 'Limité par le récepteur (fenêtre)',
-            NETWORK_LIMITED: 'Limité par le réseau (pertes)',
-            APPLICATION_LIMITED: "Limité par l'application (émetteur)",
+            RECEIVER_LIMITED: 'Piste : fenêtre du récepteur',
+            NETWORK_LIMITED: 'Piste réseau : retransmissions',
+            APPLICATION_LIMITED: "Piste : rythme de l’émetteur",
             UNDETERMINED: 'Facteur limitant indéterminé',
             UNKNOWN: 'Non classé',
         };
@@ -4476,7 +4476,7 @@ Réponds STRICTEMENT en JSON:
             points: Array.isArray(bandwidth.per_capture_point) ? bandwidth.per_capture_point : [],
             bandwidthSegments: Array.isArray(bandwidth.segments) ? bandwidth.segments : [],
             packetSegments: Array.isArray(packetMatch.segments) ? packetMatch.segments : [],
-            worstLossSegment: packetMatch.worst_loss_segment || results.summary?.worst_loss_segment || '',
+            worstLossSegment: packetMatch.worst_visibility_segment || packetMatch.worst_loss_segment || results.summary?.worst_loss_segment || '',
             worstDelaySegment: packetMatch.worst_delay_segment || results.summary?.worst_delay_segment || '',
             method: String(packetMatch.method || ''),
             summary: results.summary || {},
@@ -4504,6 +4504,7 @@ Réponds STRICTEMENT en JSON:
         }
 
         this.renderMultiClockWarning(data.packetSegments);
+        this.renderMultiEvidencePanel(data.packetSegments, this.multiPcapResults?.capture_points || []);
         this.renderMultiFlowLimitationChips(data.summary);
         this.renderMultiChainWaterfall(data);
         this.renderMultiBottleneckVerdict(data);
@@ -4514,35 +4515,45 @@ Réponds STRICTEMENT en JSON:
     renderMultiClockWarning(packetSegments) {
         const el = document.getElementById('multiClockWarning');
         if (!el) return;
+        const segments = Array.isArray(packetSegments) ? packetSegments : [];
+        el.style.display = segments.length ? 'flex' : 'none';
+        el.innerHTML = segments.length ? `<span class="bnk-alert-icon">⏱</span><div class="bnk-alert-body"><strong>Délais relatifs : aucune latence absolue déduite.</strong><div class="bnk-alert-detail">Les médianes sont centrées par sens. Le décalage brut mélange horloge et transit ; sa valeur ne mesure pas le seul décalage des horloges. La dérive d’horloge n’est pas estimée.</div></div>` : '';
+    }
 
-        const impacted = (Array.isArray(packetSegments) ? packetSegments : [])
-            .filter((seg) => seg && seg.clock_offset_warning === true);
-
-        if (!impacted.length) {
-            el.style.display = 'none';
-            el.innerHTML = '';
+    renderMultiEvidencePanel(segments, points) {
+        const host = document.getElementById('multiEvidencePanel');
+        if (!host) return;
+        host.innerHTML = '<h4>Preuves & qualité de la comparaison</h4>';
+        if (!segments.length) {
+            host.innerHTML += '<p>Aucune correspondance TCP data exploitable. Vérifiez captures, couverture et visibilité des flux ; aucun taux de perte n’est établi.</p>';
             return;
         }
+        const label = document.createElement('label'); label.textContent = 'Segment à examiner'; label.htmlFor = 'multiEvidenceSegment';
+        const select = document.createElement('select'); select.id = label.htmlFor;
+        segments.forEach((segment, index) => { const option = document.createElement('option'); option.value = index; option.textContent = segment.segment || `Segment ${index + 1}`; select.append(option); });
+        const body = document.createElement('div');
+        const render = () => { body.innerHTML = this.renderMultiSegmentEvidence(segments[Number(select.value)], points); };
+        select.addEventListener('change', render); host.append(label, select, body); render();
+    }
 
-        const details = impacted.map((seg) => {
-            const label = seg.segment
-                || `#${Number(seg.from_capture_index || 0) + 1} → #${Number(seg.to_capture_index || 0) + 1}`;
-            const offset = Number(seg.clock_offset_seconds);
-            const offsetTxt = Number.isFinite(offset) ? ` (décalage ≈ ${offset.toFixed(3)} s)` : '';
-            return `${this.escapeHtml(label)}${this.escapeHtml(offsetTxt)}`;
-        }).join(' • ');
-
-        el.style.display = 'flex';
-        el.innerHTML = `
-            <span class="bnk-alert-icon">⏱️</span>
-            <div class="bnk-alert-body">
-                <strong>Horloges non synchronisées&nbsp;: les délais sont relatifs.</strong>
-                <div class="bnk-alert-detail">
-                    Le décalage médian a été retiré segment par segment. Les valeurs de délai
-                    traduisent une <em>variation</em> (mise en file d'attente, gigue), pas une latence absolue.
-                </div>
-                <div class="bnk-alert-detail">Segment(s) concerné(s)&nbsp;: ${details}</div>
-            </div>`;
+    renderMultiSegmentEvidence(segment, points = []) {
+        if (!segment || segment.method_version !== 2) return '<p>Ancienne analyse : relancez Multi-PCAP pour obtenir les preuves par occurrence et les limites de couverture.</p>';
+        const esc = value => this.escapeHtml(String(value ?? '—'));
+        const metric = value => value === null || value === undefined ? 'Non mesurable' : esc(value);
+        const direction = value => value === 'client_to_server' ? 'Client → serveur' : 'Serveur → client';
+        const quality = [segment.from_capture_index, segment.to_capture_index].map(index => {
+            const point = points[index] || {}, coverage = point.coverage || {};
+            return `<div><strong>${esc(point.equipment_name || `Point ${index + 1}`)}</strong><span>${metric(point.packet_count)} paquets inspectés · ${metric(coverage.sampled_data_occurrences)} occurrences TCP data indexées</span><small>${coverage.packet_limit_reached || coverage.fingerprint_limit_reached || coverage.truncated_packets ? 'Couverture plafonnée ou trames tronquées' : 'Lecture complète du fichier dans les limites du moteur ; pertes du capteur inconnues'}</small></div>`;
+        }).join('');
+        const rows = (segment.evidence || []).map(row => `<tr><td>${esc(row.session_id)}</td><td>${direction(row.direction)}</td><td>${metric(row.from_frame)}</td><td>${metric(row.to_frame)}</td><td>${this.formatBottleneckMetric(row.relative_delta_ms, 'ms', 3)}</td><td>${row.state === 'not_observed_at_other_point' ? 'Non retrouvé au point B' : row.state === 'only_observed_at_other_point' ? 'Uniquement au point B' : row.pairing === 'occurrence_candidate' ? 'Répétition : candidat par ordre, délai exclu' : 'Signature unique concordante'}</td></tr>`).join('');
+        const directions = (segment.directions || []).map(row => `<tr><td>${direction(row.direction)}</td><td>${metric(row.reference_packets)}</td><td>${metric(row.matched_packets)}</td><td>${metric(row.unmatched_packets)}</td><td>${metric(row.right_only_packets)}</td><td>${metric(row.timing_sample_count)}</td></tr>`).join('');
+        return `<div class="multi-evidence-kpis"><div><span>Candidats appariés</span><strong>${metric(segment.matched_packets)}</strong></div><div><span>Non retrouvés au point B</span><strong>${metric(segment.unmatched_packets)}</strong></div><div><span>Occurrences ambiguës</span><strong>${metric(segment.ambiguous_packets)}</strong></div><div><span>Pertes réseau confirmées</span><strong>Non établies</strong></div></div>
+            <p>Confiance de corrélation : <strong>${esc(segment.confidence)}</strong>. Périmètre : occurrences TCP avec données indexées, pas tous les paquets. Les sens logiques sont conservés à travers le NAT ; une terminaison proxy/TCP ou une segmentation différente peut empêcher l’appariement.</p>
+            <div class="multi-evidence-coverage">${quality}</div>
+            <ul>${(segment.quality_warnings || []).map(message => `<li>${esc(message)}</li>`).join('')}</ul>
+            <div class="table-wrapper"><table><thead><tr><th>Sens</th><th>Point A</th><th>Appariés candidats</th><th>Non retrouvés B</th><th>Uniquement B</th><th>Paires temporelles univoques</th></tr></thead><tbody>${directions}</tbody></table></div>
+            <h5>Exemples de trames d’origine · échantillon limité à 12</h5><p>Les numéros de trame commencent à 1 dans chaque PCAP. Une répétition peut avoir plusieurs correspondances ; aucun délai individuel n’est alors affiché.</p>
+            <div class="table-wrapper"><table><thead><tr><th>Session</th><th>Sens</th><th>Trame A</th><th>Trame B</th><th>Variation relative</th><th>Observation</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
     /** Pastilles de répartition des facteurs limitants (flow_limitation_breakdown). */
@@ -4565,7 +4576,7 @@ Réponds STRICTEMENT en JSON:
         }
 
         el.style.display = 'flex';
-        el.innerHTML = `<span class="bnk-flow-legend">Pourquoi les flux ne vont pas plus vite&nbsp;:</span>`
+        el.innerHTML = `<span class="bnk-flow-legend">Hypothèses de limitation à vérifier&nbsp;:</span>`
             + entries.map((entry) => `
                 <span class="bnk-flow-chip bnk-flow-${this.sanitizeClassToken(entry.cls)}" title="${this.escapeHtml(entry.cls)}">
                     ${this.escapeHtml(this.getFlowLimitationLabel(entry.cls))}
@@ -4691,9 +4702,9 @@ Réponds STRICTEMENT en JSON:
             </div>
             <div class="bnk-seg-bar"><span style="width:${width.toFixed(1)}%"></span></div>
             <div class="bnk-seg-metrics">
-                <span>Perte paquets <strong>${this.formatBottleneckMetric(verdict.packet_loss_pct, '%')}</strong></span>
-                <span>Délai ajouté p95 <strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></span>
-                <span>Perte goodput <strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></span>
+                <span>Non-appariement TCP <strong>${this.formatBottleneckMetric(verdict.unmatched_packet_pct ?? verdict.packet_loss_pct, '%')}</strong></span>
+                <span>Dispersion relative p95−min <strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></span>
+                <span>Écart goodput <strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></span>
                 <span>Gigue file <strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></span>
                 <span>Confiance <strong>${this.escapeHtml(String(verdict.confidence || '-').toUpperCase())}</strong></span>
             </div>
@@ -4760,19 +4771,19 @@ Réponds STRICTEMENT en JSON:
                 </div>
             </div>
             <div class="bnk-verdict-metrics">
-                <div><span>Perte de paquets</span><strong>${this.formatBottleneckMetric(verdict.packet_loss_pct, '%')}</strong></div>
-                <div><span>Perte de goodput</span><strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></div>
-                <div><span>Délai ajouté p95</span><strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></div>
-                <div><span>Gigue de file</span><strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></div>
+                <div><span>Non-appariement TCP</span><strong>${this.formatBottleneckMetric(verdict.unmatched_packet_pct ?? verdict.packet_loss_pct, '%')}</strong></div>
+                <div><span>Écart de goodput</span><strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></div>
+                <div><span>Dispersion relative p95−min</span><strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></div>
+                <div><span>Dispersion relative</span><strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></div>
                 <div><span>Signature trafic</span><strong>${signature}</strong></div>
                 <div><span>Paquets appariés</span><strong>${pktSegment ? Number(pktSegment.matched_packets || 0).toLocaleString('fr-FR') : '-'}</strong></div>
             </div>
-            <h5 class="bnk-verdict-title">Pourquoi ce segment est incriminé</h5>
+            <h5 class="bnk-verdict-title">Pourquoi examiner ce segment</h5>
             ${reasonsHtml}
             <h5 class="bnk-verdict-title">Ce qu'il faut vérifier</h5>
             ${recoHtml}
             <div class="bnk-verdict-footer">
-                <span>Pire segment en pertes&nbsp;: <strong>${worstLoss}</strong></span>
+                <span>Plus grand écart de visibilité&nbsp;: <strong>${worstLoss}</strong></span>
                 <span>Pire segment en délai&nbsp;: <strong>${worstDelay}</strong></span>
             </div>`;
     }
