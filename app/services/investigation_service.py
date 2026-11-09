@@ -20,6 +20,8 @@ FIELDS = (
     'tcp.analysis.retransmission', 'tcp.analysis.ack_rtt', 'dns.qry.name',
     'dns.flags.response', 'dns.flags.rcode', 'dns.a', 'dns.aaaa',
     'tls.handshake.extensions_server_name', 'http.host', 'http.request.method', 'http.response.code',
+    'tcp.flags.syn', 'tcp.flags.ack', 'tcp.seq_raw', 'tcp.ack_raw', 'tcp.len',
+    'tls.handshake.type', 'http.request_in', 'dns.response_to',
 )
 PRESETS = {
     'tcp-failures': ('tcp.flags.reset == 1 || tcp.analysis.retransmission || tcp.analysis.lost_segment',
@@ -71,6 +73,13 @@ def _decode(values):
         'tls_server_name':row.get('tls.handshake.extensions_server_name','')[:253],
         'http_host':row.get('http.host','')[:253], 'http_method':row.get('http.request.method','')[:20],
         'http_status':_number(row.get('http.response.code')),
+        'tcp_syn':any(v.lower() in {'1','true'} for v in split('tcp.flags.syn')),
+        'tcp_ack':any(v.lower() in {'1','true'} for v in split('tcp.flags.ack')),
+        'tcp_sequence':_number(row.get('tcp.seq_raw')), 'tcp_ack_number':_number(row.get('tcp.ack_raw')),
+        'tcp_payload_length':_number(row.get('tcp.len')),
+        'tls_handshake_types':[_number(v) for v in split('tls.handshake.type')],
+        'http_request_frames':[_number(v) for v in split('http.request_in')],
+        'dns_request_frame':_number(row.get('dns.response_to')),
     }
     result.update(src_ips=src_ips,dst_ips=dst_ips,dns_names=split('dns.qry.name'),
                   tls_server_names=split('tls.handshake.extensions_server_name'),http_hosts=split('http.host'),

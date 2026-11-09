@@ -1,7 +1,7 @@
 /* Open authenticated MCP evidence in the existing analysis/OSI interface. */
 (function(root){
  'use strict';
- const tabs=new Set(['overview','dns','http','team-ai','team-ia','timeline','streams','multi','packets','tls-audit','threat-intel','flow-behavior','lateral-movement','qos','tcp-health','playbook']);
+ const tabs=new Set(['overview','dns','http','team-ai','team-ia','timeline','transactions','streams','multi','packets','tls-audit','threat-intel','flow-behavior','lateral-movement','qos','tcp-health','playbook']);
  function parseEvidenceLocation(href){
   try{
    const url=new URL(href,'https://pcap.invalid');

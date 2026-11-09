@@ -144,6 +144,8 @@ from app.security_page import create_security_router
 app.include_router(create_security_router(WEB_IDENTITY))
 from app.demo import create_demo_router
 app.include_router(create_demo_router(storage_service))
+from app.services.transaction_service import create_transaction_router
+app.include_router(create_transaction_router(storage_service))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -160,6 +162,8 @@ async def root(request: Request):
         "tls_css": _asset_version("css", "tls-decryption.css"),
         "activity_js": _asset_version("js", "activity-model.js"),
         "engines_js": _asset_version("js", "ai-engines.js"),
+        "transactions_js": _asset_version("js", "transactions.js"),
+        "transactions_css": _asset_version("css", "transactions.css"),
         "sharing_js": _asset_version("js", "capture-sharing.js"),
         "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),

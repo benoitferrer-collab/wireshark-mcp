@@ -22,7 +22,7 @@ FLOW='nomios_flow'
 SESSION_SECONDS=8*3600
 logger=logging.getLogger(__name__)
 
-SHARE_TABS={'overview','streams','packets','dns','http','timeline','tcp-health','qos','tls-audit','threat-intel','flow-behavior','lateral-movement','playbook','team-ia'}
+SHARE_TABS={'overview','streams','packets','dns','http','timeline','transactions','tcp-health','qos','tls-audit','threat-intel','flow-behavior','lateral-movement','playbook','team-ia'}
 def share_return(query):
     task=query.get('task','')
     if not isinstance(task,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',task):return '', '/'

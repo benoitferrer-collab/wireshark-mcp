@@ -1980,6 +1980,8 @@ Réponds STRICTEMENT en JSON:
             this.setMenuHealthStatus('multi-pcap', this.multiPcapResults ? 'ok' : 'missing', this.multiPcapResults ? 'Résultats multi-PCAP disponibles' : 'Chargez plusieurs PCAP puis lancez la corrélation');
             this.renderMultiPcapCaptureTable();
             this.renderMultiPcapResults();
+        } else if (tabId === 'transactions' && this.currentTaskId) {
+            window.PcapTransactions?.load(this.currentTaskId);
         } else if (tabId === 'timeline' && this.currentResults) {
             console.log('🕐 Chargement de la timeline...');
             this.setMenuHealthStatus('timeline', 'loading', 'Chargement timeline...');
