@@ -17,7 +17,7 @@ def install_demo(storage):
                 continue
             task_id=entry['task_id']
             result=storage.load_results(task_id)
-            if result and result.get('metadata',{}).get('demo_version')==1 and result['metadata'].get('demo') is True and storage.get_pcap_path(task_id):
+            if result and result.get('metadata',{}).get('demo_version')==2 and result['metadata'].get('demo') is True and storage.get_pcap_path(task_id):
                 return {'task_id':task_id,'synthetic':True,'reused':True,'packets':192}
         task_id='demo-support-'+uuid.uuid4().hex
         capture=storage.get_upload_path(task_id,DEMO_NAME)

@@ -17,7 +17,7 @@ def test_demo_install_reuses_only_synthetic_capture(tmp_path):
 def test_demo_bundle_has_no_private_paths_or_real_addresses():
     payload=Path('app/demo_data/results.json').read_text()
     assert '/Users/' not in payload and 'Bearer ' not in payload
-    assert json.loads(payload)['metadata']['demo_version']==1
+    assert json.loads(payload)['metadata']['demo_version']==2
 
 def test_cloud_demo_original_capture_survives_new_instance(tmp_path):
     from tests.test_cloud import Objects, make_storage
@@ -49,3 +49,23 @@ def test_presenter_facts_come_from_original_capture_and_reject_real_tasks(tmp_pa
     assert facts['http_ok']['count']==18
     assert facts['coverage']['complete'] is True
     with pytest.raises(ValueError):demo_evidence(store,'real-capture')
+
+def test_demo_replaces_outdated_analysis_without_deleting_original(tmp_path):
+    from app.demo import install_demo
+    from app.services.storage_service import StorageService
+    store=StorageService();store.upload_dir=tmp_path/'uploads';store.results_dir=tmp_path/'results';store._ensure_directories()
+    old=install_demo(store)
+    result=store.load_results(old['task_id']);result['metadata']['demo_version']=1
+    store.save_results(old['task_id'],result)
+    current=install_demo(store)
+    assert current['task_id']!=old['task_id']
+    assert store.load_results(old['task_id'])['metadata']['demo_version']==1
+    alerts=store.load_results(current['task_id'])['dns_analysis']['anomalies']
+    assert any(a['type']=='NXDOMAIN_RESPONSES' and a['details']['count']==4 for a in alerts)
+
+def test_demo_dns_anomaly_references_use_original_capture_indices():
+    from scapy.all import DNS, rdpcap
+    packets=rdpcap('app/demo_data/DEMO_Nomios_Support.pcap')
+    result=json.loads(Path('app/demo_data/results.json').read_text())
+    failure=next(a for a in result['dns_analysis']['anomalies'] if a['type']=='NXDOMAIN_RESPONSES')
+    assert [r['packet_idx'] for r in failure['details']['packets']]==[i for i,p in enumerate(packets) if DNS in p and p[DNS].qr and p[DNS].rcode==3]

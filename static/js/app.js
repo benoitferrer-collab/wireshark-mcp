@@ -6750,6 +6750,11 @@ Réponds STRICTEMENT en JSON:
         const tbody = document.querySelector('#dnsAnomaliesTable tbody');
         if (!tbody) return;
 
+        if (!anomalies.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune anomalie DNS signalée par cette analyse.</td></tr>';
+            return;
+        }
+
         tbody.innerHTML = anomalies.slice(0, 10).map(a => `
             <tr>
                 <td>${this.escapeHtml(a.type || '-')}</td>

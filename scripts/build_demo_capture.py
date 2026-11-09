@@ -39,7 +39,7 @@ def build():
     packets.sort(key=lambda p:p.time)
     path=DEST/NAME;wrpcap(str(path),packets)
     results=PCAPAnalysisService().analyze(path,NAME,enable_enrichment=False)
-    results['metadata'].update({'demo':True,'demo_version':1,'analysis_timestamp':'2026-11-09T13:00:00Z','analysis_duration_seconds':0,'pcap_path':NAME})
+    results['metadata'].update({'demo':True,'demo_version':2,'analysis_timestamp':'2026-11-09T13:00:00Z','analysis_duration_seconds':0,'pcap_path':NAME})
     results.get('streams',{}).update({'pcap_path':NAME})
     (DEST/'results.json').write_text(json.dumps(results,separators=(',',':'),default=str))
     print('Synthetic demo generated:',len(packets),'packets')
