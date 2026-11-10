@@ -114,7 +114,7 @@ if WEB_IDENTITY:
         from app.tls.routes import create_tls_router
         TLS_SERVICE = TLSJobs(identity_store, storage_service.objects, os.environ['TLS_SECRETS_ENCRYPTION_KEY'])
         storage_service.tls_jobs = TLS_SERVICE
-        app.include_router(create_tls_router(TLS_SERVICE))
+        app.include_router(create_tls_router(TLS_SERVICE,storage=storage_service))
     identity_provider = EntraProvider(WEB_IDENTITY)
     app.include_router(create_identity_router(WEB_IDENTITY, identity_store, identity_provider, maintenance_hook=TLS_SERVICE.prune if TLS_SERVICE else None))
     app.add_middleware(WebIdentityMiddleware, settings=WEB_IDENTITY, store=identity_store, provider=identity_provider)

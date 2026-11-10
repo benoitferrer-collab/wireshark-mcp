@@ -54,3 +54,42 @@ def test_mcp_reads_paged_report_without_secret(env):
     assert r.json()['report']['next_offset']==75
     assert 'CLIENT_RANDOM' not in r.text and 'owner' not in r.text
     assert client.get('/api/mcp-data/capture/tls-decryption?limit=50').status_code==422
+
+def test_delayed_queue_is_explicit_without_inventing_a_quota_error(client_env):
+    client,service,objects,sent=client_env
+    job=service.create('capture','owner','keylog',KEYLOG)
+    with service.store.connect() as db:db.execute('UPDATE tls_jobs SET created=? WHERE id=?',(time.time()-180,job['id']))
+    client.cookies.set('nomios_session','session')
+    result=client.get('/api/identity/tls/capture').json()
+    assert result['waiting_delayed'] is True
+    assert result['elapsed_seconds']>=180
+    assert 'retardée' in result['notice']
+    assert 'épuisé' not in result['notice']
+    assert result['status']=='queued'
+
+
+def test_preflight_requires_browser_session(client_env):
+    client,*_=client_env
+    assert client.get('/api/identity/tls/capture/preflight').status_code==401
+    assert client.get('/api/identity/tls/capture/preflight',headers={'Authorization':'Bearer '+'x'*40}).status_code==401
+
+def test_preflight_reads_only_capture_metadata_with_authorized_session(env):
+    from pathlib import Path
+    service,_=env
+    app=FastAPI()
+    class Storage:
+        def get_pcap_path(self,capture):
+            assert capture=='capture'
+            return str(Path(__file__).parent/'fixtures/tls/tls13.pcap')
+    app.include_router(create_tls_router(service,storage=Storage()))
+    @app.middleware('http')
+    async def authorize(request,call_next):
+        request.state.identity={'oid':'owner'}
+        return await call_next(request)
+    import os
+    from unittest.mock import patch
+    with patch.dict(os.environ,{'TSHARK_PATH':'/Applications/Wireshark.app/Contents/MacOS/tshark'}):
+        result=TestClient(app).get('/api/identity/tls/capture/preflight?kind=rsa')
+    assert result.status_code==200,result.text
+    assert result.json()['keylog_required']>0
+    assert 'CLIENT_RANDOM' not in result.text and 'PRIVATE KEY' not in result.text

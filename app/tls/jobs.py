@@ -77,7 +77,7 @@ class TLSJobs:
         with self.store.connect() as db:
             rows=db.execute('DELETE FROM tls_jobs WHERE capture_id=? RETURNING id',(capture,)).fetchall()
             db.execute('DELETE FROM tls_current WHERE capture_id=?',(capture,))
-        self.objects.delete([key for row in rows for key in (f"tls-secrets/{row['id']}.json",f"tls-results/{row['id']}.json")])
+        self.objects.delete([key for row in rows for key in (f"tls-secrets/{row['id']}.json",f"tls-results/{row['id']}.json",f"tls-progress/{row['id']}.json")])
     def prune(self):
         with self.store.connect() as db:rows=db.execute('SELECT id FROM tls_jobs WHERE expires<=?',(time.time(),)).fetchall()
         for row in rows:self.fail(row['id'],'Secrets expirés ; importez-les à nouveau.')

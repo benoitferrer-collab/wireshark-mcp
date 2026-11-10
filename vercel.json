@@ -31,6 +31,64 @@
           "env": "MCP_BACKEND_URL"
         }
       ]
+    },
+    "worker": {
+      "root": ".",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.worker",
+      "command": [
+        "python",
+        "-m",
+        "uvicorn",
+        "app.cloud.on_demand:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "80"
+      ],
+      "functions": {
+        "**": {
+          "maxDuration": 300,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "pcap-analysis",
+              "maxDeliveries": 3,
+              "retryAfterSeconds": 30,
+              "maxConcurrency": 1
+            }
+          ]
+        }
+      }
+    },
+    "tlsworker": {
+      "root": ".",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.worker",
+      "command": [
+        "python",
+        "-m",
+        "uvicorn",
+        "app.cloud.on_demand:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "80"
+      ],
+      "functions": {
+        "**": {
+          "maxDuration": 300,
+          "experimentalTriggers": [
+            {
+              "type": "queue/v2beta",
+              "topic": "pcap-tls-decryption",
+              "maxDeliveries": 3,
+              "retryAfterSeconds": 30,
+              "maxConcurrency": 1
+            }
+          ]
+        }
+      }
     }
   },
   "rewrites": [
@@ -71,21 +129,6 @@
       }
     }
   ],
-  "daemons": {
-    "analysis": {
-      "root": ".",
-      "entrypoint": "Dockerfile.worker",
-      "instances": {
-        "iad1": 1
-      },
-      "resources": {
-        "requests": {
-          "memory": "2Gi"
-        }
-      },
-      "terminationGracePeriodSeconds": 300
-    }
-  },
   "crons": [
     {
       "path": "/api/identity/maintenance",

@@ -8,15 +8,20 @@ from .jobs import JobService, valid_id
 from .objects import BlobObjects
 
 
-def handle_delivery(task_id, delivery_count, objects, runner=subprocess.run):
+def handle_delivery(task_id, delivery_count, objects, runner=None, *, timeout=1200):
     valid_id(task_id)
+    if runner is None:
+        from app.tls.worker import run_isolated
+        runner=run_isolated
     jobs = JobService(objects)
     if objects.read_json(f'deleted/{task_id}.json'): return True
     status = jobs.read_status(task_id)
     if status and status['status'] in ('completed', 'failed'): return True
-    jobs.status(task_id, 'processing', 10, 'Analyse en cours sur Vercel')
+    jobs.status(task_id, 'processing', 10, f'Analyse en cours sur Vercel · tentative {delivery_count}/3')
     try:
-        process = runner([sys.executable, '-m', 'app.cloud.run_job', task_id], timeout=1200, check=False)
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix='pcap-delivery-') as root:
+            process = runner([sys.executable, '-m', 'app.cloud.run_job', task_id, root], timeout=timeout, check=False)
         if process.returncode == 0:
             completed = jobs.read_status(task_id)
             if completed and completed['status'] == 'completed': return True

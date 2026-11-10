@@ -21,3 +21,12 @@ def test_finalize_queues_only_task_id_and_reads_durable_status(tmp_path):
         assert client.get('/api/status/abc').json()['status'] == 'queued'
         assert client.get('/api/status/missing').status_code == 404
         assert client.post('/api/upload', content=b'file').status_code == 409
+
+def test_delayed_analysis_reports_durable_queue_warning(tmp_path):
+    objects=Objects()
+    objects.write_json('status/abc.json',{'task_id':'abc','status':'queued','updated_at':'2026-01-01T00:00:00+00:00','message':'Waiting'})
+    app=FastAPI();app.include_router(create_cloud_router(create_cloud_storage(StorageService,objects,tmp_path)))
+    result=TestClient(app).get('/api/status/abc').json()
+    assert result['waiting_delayed'] is True
+    assert 'retardée' in result['message']
+    assert result['status']=='queued'

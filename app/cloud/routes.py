@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from .jobs import JobService
 
@@ -35,6 +36,15 @@ def create_cloud_router(storage, sender=None):
         try: data = jobs.read_status(task_id)
         except ValueError: raise HTTPException(400, 'Identifiant invalide') from None
         if data is None: raise HTTPException(404, 'Analyse inconnue ou supprimée')
+        if data.get('status') in ('queued','processing'):
+            try:elapsed=max(0,int((datetime.now(timezone.utc)-datetime.fromisoformat(data['updated_at'])).total_seconds()))
+            except (KeyError,ValueError,TypeError):elapsed=0
+            data['elapsed_seconds']=elapsed
+            data['waiting_delayed']=data['status']=='queued' and elapsed>=90
+            if data['waiting_delayed']:
+                data['message']='Prise en charge retardée : vérifiez la disponibilité et les quotas Vercel. La capture reste en file.'
+            elif data['status']=='processing' and elapsed>=360:
+                data['message']='Traitement interrompu ou prolongé ; la file prévoit une nouvelle tentative. Consultez les logs si l’attente persiste.'
         return data
 
     @router.post('/api/upload')

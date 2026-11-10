@@ -4,10 +4,13 @@
  if(!window.PCAP_CONFIG?.tlsDecryption)return;
  const node=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
  const app=()=>typeof analyzer==='undefined'?null:analyzer;
- let capture=null,timer=null,generation=0,pending=null,uploadDraft=null,offset=0;
+ let capture=null,timer=null,generation=0,pending=null,uploadDraft=null,offset=0,failures=0,readinessKey=null;
  const panel=node('section',undefined,'tls-panel');panel.id='tlsDecryptionPanel';
  panel.append(node('p','INVESTIGATION TLS','tls-eyebrow'),node('h3','Vos échanges, déchiffrés.'),node('p','Ajoutez les secrets correspondant à cette capture pour retrouver les échanges HTTP/HTTPS.','tls-muted'));
  const live=node('p','Aucun déchiffrement demandé.','tls-status');live.setAttribute('role','status');
+ const readiness=node('div',undefined,'tls-readiness');readiness.hidden=true;
+ const statusMeta=node('p','', 'tls-help');
+ const refreshButton=node('button','Actualiser le suivi','btn btn-secondary');refreshButton.type='button';refreshButton.addEventListener('click',()=>refresh());
  const output=node('div');const pager=node('div',undefined,'tls-pager');
  function form(forUpload){
   const details=node('details',undefined,'tls-options');details.append(node('summary',forUpload?'Déchiffrement TLS · facultatif':'Ajouter ou remplacer les secrets de cette capture'));
@@ -20,7 +23,7 @@
   f.append(node('p','RSA : TLS ≤ 1.2 avec échange RSA, sans ECDHE. Pour TLS 1.3, utilisez un keylog. RSA : 64 Kio · keylog : 2 Mio.','tls-help'));
   f.append(node('p','Secrets chiffrés pendant l’attente, supprimés après traitement. Corps, cookies et authentification exclus du rapport.','tls-help'));
   if(forUpload)f.append(node('p','Choisissez ces secrets avant d’importer le PCAP. Gardez cet onglet ouvert jusqu’à la fin de l’analyse.','tls-help'));
-  else{const b=node('button','Déchiffrer cette capture','btn btn-primary');b.type='submit';f.append(b);f.addEventListener('submit',async e=>{e.preventDefault();if(!capture)return;try{await submit(capture,selection(),b);clear();}catch(error){live.textContent=error.message;}});}
+  else{const check=node('button','Vérifier la compatibilité TLS','btn btn-secondary');check.type='button';check.addEventListener('click',async()=>{check.disabled=true;try{await preflight(capture,select.value);}catch(e){live.textContent=e.message;}finally{check.disabled=false;}});f.append(check);const b=node('button','Déchiffrer cette capture','btn btn-primary');b.type='submit';f.append(b);f.addEventListener('submit',async e=>{e.preventDefault();if(!capture)return;try{await submit(capture,selection(),b);clear();}catch(error){live.textContent=error.message;}});}
   details.append(f);
   function selection(){const chosen=file.files[0];if(!chosen)return null;if(chosen.size>(select.value==='rsa'?65536:2097152))throw new Error('Fichier trop volumineux : RSA 64 Kio, keylog 2 Mio.');return {file:chosen,kind:select.value,password:password.value};}
   function clear(){file.value='';password.value='';}
@@ -28,19 +31,35 @@
  }
  const importForm=form(true),existingForm=form(false);
  document.getElementById('uploadArea')?.before(importForm.element);
- panel.append(existingForm.element,live,output,pager);document.getElementById('tab-http')?.prepend(panel);
+ panel.append(existingForm.element,readiness,live,statusMeta,refreshButton,output,pager);document.getElementById('tab-http')?.prepend(panel);
+ async function preflight(id,kind){
+  if(!id)return;const version=generation;
+  const response=await fetch(`/api/identity/tls/${encodeURIComponent(id)}/preflight?kind=${kind}`,{signal:AbortSignal.timeout(30000)});
+  if(!response.ok)throw new Error('Contrôle TLS indisponible. Actualisez puis réessayez.');
+  const r=await response.json();if(id!==capture||version!==generation)return;
+  readiness.replaceChildren(node('strong','Compatibilité de la capture'),node('p',r.message));
+  readiness.append(node('p',`${r.observed_sessions??0} négociations observées · ${r.rsa_candidates??0} candidates RSA · ${r.keylog_required??0} nécessitant un keylog · ${r.unknown??0} indéterminées`,'tls-help'));
+  for(const row of r.sessions||[]){const b=node('button',`Trame #${row.frame_number} · ${row.version} · ${row.cipher_suite??'suite inconnue'}`,'tls-frame');b.type='button';b.addEventListener('click',()=>app()?.showPacketDetails(row.frame_number-1));readiness.append(b);}
+  readiness.append(node('p',r.coverage?.scope||'Compatibilité partielle ; correspondance des secrets non vérifiée.','tls-help'));readiness.hidden=false;readinessKey=id+':'+kind;
+ }
  async function submit(id,selected,button){
   if(!selected)throw new Error('Sélectionnez un fichier de secrets.');
   const data=new FormData();data.append('kind',selected.kind);data.append('file',selected.file);data.append('password',selected.password);
   if(button)button.disabled=true;
-  try{const response=await fetch(`/api/identity/tls/${encodeURIComponent(id)}`,{method:'POST',body:data});const result=await response.json();if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Déchiffrement non démarré. Vérifiez le fichier.');
+  try{const version=generation;if(readinessKey!==id+':'+selected.kind){try{await preflight(id,selected.kind);}catch(e){live.textContent=e.message;}}
+   if(capture!==id||generation!==version)throw new Error('La capture affichée a changé. Relancez depuis la capture souhaitée.');
+   generation++;clearTimeout(timer);
+   const response=await fetch(`/api/identity/tls/${encodeURIComponent(id)}`,{method:'POST',body:data});const result=await response.json();if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Déchiffrement non démarré. Vérifiez le fichier.');
    if(capture===id){offset=0;await refresh();}
   }finally{if(button)button.disabled=false;}
  }
  function render(data){
   output.replaceChildren();pager.replaceChildren();
   const labels={not_requested:'Aucun déchiffrement demandé.',queued:'Secrets reçus · en attente du worker.',processing:'Déchiffrement en cours…',failed:data.error||'Déchiffrement impossible.',completed:'Traitement terminé.'};
-  live.textContent=labels[data.status]||data.status;
+  live.textContent=data.notice||labels[data.status]||data.status;
+  live.dataset.state=data.waiting_delayed?'delayed':data.status;
+  const stage={preflight:'Vérification de la capture',decoding:'Décodage des échanges',queued:'Dans la file durable'};
+  statusMeta.textContent=['queued','processing'].includes(data.status)?`${stage[data.stage]||'Traitement'} · ${data.elapsed_seconds??0} s depuis l’import${data.attempt?' · tentative '+data.attempt+'/3':''}`:'';
   const r=data.report;if(!r)return;
   live.textContent=r.message||live.textContent;
   const metrics=node('div',undefined,'tls-metrics');for(const [v,l] of [[r.decrypted_packets,'paquets décodés'],[r.stream_count,'flux TLS'],[r.total,'échanges HTTP']]){const m=node('div');m.append(node('strong',String(v??0)),node('span',l));metrics.append(m);}output.append(metrics);
@@ -53,14 +72,14 @@
  }
  async function refresh(){
   clearTimeout(timer);const id=capture,version=generation;if(!id)return;
-  try{const response=await fetch(`/api/identity/tls/${encodeURIComponent(id)}?offset=${offset}&limit=25`);if(!response.ok)throw new Error('Résultat TLS indisponible. Réessayez.');const data=await response.json();if(id!==capture||version!==generation)return;render(data);if(['queued','processing'].includes(data.status))timer=setTimeout(refresh,4000);}
-  catch(e){if(version===generation)live.textContent=e.message;}
+  try{const response=await fetch(`/api/identity/tls/${encodeURIComponent(id)}?offset=${offset}&limit=25`,{signal:AbortSignal.timeout(15000)});if([401,403].includes(response.status)){if(version===generation)live.textContent='Connexion Microsoft expirée ou accès refusé. Reconnectez-vous pour reprendre le suivi.';return;}if(!response.ok)throw new Error('Résultat TLS indisponible. Réessayez.');const data=await response.json();if(id!==capture||version!==generation)return;failures=0;render(data);if(['queued','processing'].includes(data.status))timer=setTimeout(refresh,4000);}
+  catch(e){if(version===generation){live.textContent='Suivi momentanément indisponible ; nouvelle vérification automatique. Les secrets ne sont pas renvoyés.';failures++;timer=setTimeout(refresh,Math.min(30000,4000*failures));}}
  }
  document.addEventListener('pcap:upload-start',()=>{try{uploadDraft=importForm.selection();}catch(e){uploadDraft=null;app()?.showToast('error','Secrets TLS',e.message);}});
  document.addEventListener('pcap:upload-queued',e=>{pending=uploadDraft?{id:e.detail.taskId,value:uploadDraft}:null;uploadDraft=null;importForm.clear();});
  document.addEventListener('pcap:upload-failed',()=>{pending=null;uploadDraft=null;importForm.clear();});
  document.addEventListener('pcap:analysis-loaded',async()=>{
-  capture=app()?.currentTaskId;generation++;offset=0;clearTimeout(timer);existingForm.clear();output.replaceChildren();pager.replaceChildren();
+  capture=app()?.currentTaskId;generation++;offset=0;failures=0;readinessKey=null;readiness.hidden=true;statusMeta.textContent='';clearTimeout(timer);existingForm.clear();output.replaceChildren();pager.replaceChildren();
   if(pending&&pending.id===capture){const chosen=pending;pending=null;try{await submit(chosen.id,chosen.value);}catch(e){live.textContent=e.message;app()?.showToast('error','Déchiffrement TLS',e.message);}return;}
   refresh();
  });

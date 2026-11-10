@@ -27,12 +27,28 @@ def execute(job_id,service,root):
     root=Path(root);root.chmod(0o700)
     path=root/'capture.pcap'
     service.objects.download(pathname,path,max_size=MAX_FILE)
+    from .readiness import inspect_capture
+    try:readiness=inspect_capture(path,job['kind'])
+    except ValueError:readiness={'state':'unknown','message':'Contrôle préalable indisponible ; compatibilité indéterminée.'}
+    progress=service.objects.read_json(f'tls-progress/{job_id}.json') or {}
+    service.objects.write_json(f'tls-progress/{job_id}.json',{**progress,'stage':'decoding','updated_at':time.time()})
     report=decode(path,job['kind'],secret,root)
+    report['readiness']=readiness
+    if not report.get('decrypted_packets') and job['kind']=='rsa' and readiness['state']=='keylog_recommended':
+        report['message']='Aucun échange déchiffré. Les négociations observées nécessitent un SSLKEYLOGFILE (TLS 1.3 ou échange éphémère).'
     service.complete(job_id,report)
 
 
 def run_isolated(args,timeout,check=False,**kwargs):
     # The parent owns the process group and scratch even if the child is killed.
+    # Container Functions receive short-lived OIDC in request context. Forward
+    # only that token to the child (not argv/logs or persistent files).
+    try:
+        from vercel.headers import get_headers
+        token=(get_headers() or {}).get('x-vercel-oidc-token')
+    except ImportError:token=None
+    if token:
+        kwargs['env']={**os.environ,**kwargs.get('env',{}),'VERCEL_OIDC_TOKEN':token}
     with subprocess.Popen(args,start_new_session=True,**kwargs) as process:
         try:
             code=process.wait(timeout=timeout)
@@ -51,6 +67,7 @@ def handle_tls_delivery(job_id,count,objects,runner=run_isolated,service=None):
     if job['status'] in ('completed','failed'):objects.delete([f'tls-secrets/{job_id}.json']);return True
     if job['expires']<=time.time():service.fail(job_id,'Secrets expirés ; importez-les à nouveau.');return True
     service.processing(job_id)
+    objects.write_json(f'tls-progress/{job_id}.json',{'stage':'preflight','attempt':count,'updated_at':time.time()})
     try:
         with tempfile.TemporaryDirectory(prefix='tls-worker-') as root:
             runner([sys.executable,'-m','app.tls.worker',job_id,root],timeout=240,check=False,
