@@ -5,4 +5,5 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
 COPY deploy/requirements-cloud.txt /app/requirements-cloud.txt
 RUN pip install --no-cache-dir -r requirements-cloud.txt
 COPY . /app
-CMD ["python", "-m", "app.cloud.worker"]
+EXPOSE 80
+CMD ["python", "-m", "uvicorn", "app.cloud.on_demand:app", "--host", "0.0.0.0", "--port", "80"]

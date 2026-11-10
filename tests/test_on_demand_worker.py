@@ -87,3 +87,11 @@ def test_child_receives_request_oidc_without_persisting_it(monkeypatch):
         result=run_isolated([sys.executable,'-c',code],timeout=3)
     assert result.returncode==0
     assert os.environ.get('VERCEL_OIDC_TOKEN')!='synthetic-test-token'
+
+
+def test_worker_image_itself_starts_http_consumer_without_service_command_override():
+    from pathlib import Path
+    source=(Path(__file__).parents[1]/'Dockerfile.worker').read_text()
+    assert '"app.cloud.on_demand:app"' in source
+    assert 'CMD ["python", "-m", "app.cloud.worker"]' not in source
+    assert 'EXPOSE 80' in source

@@ -36,16 +36,6 @@
       "root": ".",
       "runtime": "container",
       "entrypoint": "Dockerfile.worker",
-      "command": [
-        "python",
-        "-m",
-        "uvicorn",
-        "app.cloud.on_demand:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "80"
-      ],
       "functions": {
         "**": {
           "maxDuration": 300,
@@ -65,16 +55,6 @@
       "root": ".",
       "runtime": "container",
       "entrypoint": "Dockerfile.worker",
-      "command": [
-        "python",
-        "-m",
-        "uvicorn",
-        "app.cloud.on_demand:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "80"
-      ],
       "functions": {
         "**": {
           "maxDuration": 300,
