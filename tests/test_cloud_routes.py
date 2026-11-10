@@ -44,3 +44,26 @@ def test_push_publish_uses_current_deployment_partition(monkeypatch,tmp_path):
     assert response.status_code==200,response.text
     from vercel.queue import CURRENT_DEPLOYMENT
     assert calls==[CURRENT_DEPLOYMENT]
+
+def test_stalled_retry_needs_browser_identity_and_refuses_active_jobs(tmp_path):
+    from starlette.requests import Request
+    from app.cloud.jobs import JobService
+    objects=Objects();jobs=JobService(objects)
+    jobs.status('abc','processing',10,'Active')
+    objects.write_json('jobs/abc.json',{'task_id':'abc'})
+    sent=[]
+    async def sender(task):sent.append(task)
+    app=FastAPI();app.include_router(create_cloud_router(create_cloud_storage(StorageService,objects,tmp_path),sender))
+    client=TestClient(app)
+    assert client.post('/api/identity/analysis/abc/retry').status_code==401
+    app=FastAPI();app.include_router(create_cloud_router(create_cloud_storage(StorageService,objects,tmp_path),sender))
+    @app.middleware('http')
+    async def identify(request,call_next):
+        request.state.identity={'oid':'owner'}
+        return await call_next(request)
+    client=TestClient(app)
+    assert client.post('/api/identity/analysis/abc/retry').status_code==409
+    objects.write_json('status/abc.json',{'task_id':'abc','status':'queued','updated_at':'2026-01-01T00:00:00+00:00'})
+    assert client.post('/api/identity/analysis/abc/retry').status_code==202
+    assert sent==['abc']
+    assert jobs.read_status('abc')['status']=='queued'

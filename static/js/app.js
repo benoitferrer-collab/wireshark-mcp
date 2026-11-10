@@ -2164,6 +2164,24 @@ Réponds STRICTEMENT en JSON:
             progressStatus.textContent = data.message;
         }
 
+        let retry = document.getElementById('processingRetry');
+        if (data.waiting_delayed && !retry) {
+            retry = document.createElement('button');retry.id='processingRetry';retry.className='btn btn-secondary';retry.type='button';retry.textContent='Relancer la prise en charge';
+            progressStatus.after(retry);
+        }
+        if (retry) {
+            retry.hidden=!data.waiting_delayed;
+            const taskId=this.currentTaskId;
+            retry.onclick=async()=>{
+                retry.disabled=true;
+                try{
+                    const response=await fetch(`/api/identity/analysis/${encodeURIComponent(taskId)}/retry`,{method:'POST'});
+                    const result=await response.json();if(!response.ok)throw new Error(result.detail||'Relance indisponible');
+                    retry.hidden=true;progressStatus.textContent='Nouvelle prise en charge demandée.';
+                }catch(e){this.showToast('error','Traitement',e.message);}finally{retry.disabled=false;}
+            };
+        }
+
         if (data.status === 'completed') {
             progressFill.style.width = '100%';
             progressStatus.textContent = 'Analyse terminée!';
