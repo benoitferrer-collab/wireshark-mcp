@@ -52,6 +52,7 @@ def test_mcp_reads_paged_report_without_secret(env):
     r=client.get('/api/mcp-data/capture/tls-decryption?offset=50&limit=25')
     assert r.status_code==200 and len(r.json()['report']['data'])==25
     assert r.json()['report']['next_offset']==75
+    assert 'http_summary' not in r.json()['report']
     assert 'CLIENT_RANDOM' not in r.text and 'owner' not in r.text
     assert client.get('/api/mcp-data/capture/tls-decryption?limit=50').status_code==422
 
@@ -93,3 +94,16 @@ def test_preflight_reads_only_capture_metadata_with_authorized_session(env):
     assert result.status_code==200,result.text
     assert result.json()['keylog_required']>0
     assert 'CLIENT_RANDOM' not in result.text and 'PRIVATE KEY' not in result.text
+
+def test_full_tls_chart_totals_are_independent_of_pagination(client_env):
+    client,service,objects,sent=client_env
+    job=service.create('capture','owner','keylog',KEYLOG)
+    rows=[{'method':'GET','path':'/health','host':'example.test','frame_number':i+1} for i in range(80)]
+    service.complete(job['id'],{'rows':rows,'state':'decoded','decrypted_packets':80})
+    client.cookies.set('nomios_session','session')
+    first=client.get('/api/identity/tls/capture?offset=0').json()['report']
+    second=client.get('/api/identity/tls/capture?offset=25').json()['report']
+    assert len(first['data'])==len(second['data'])==25
+    assert first['http_summary']==second['http_summary']
+    assert first['http_summary']['methods']=={'GET':80}
+    assert len(first['http_summary']['requests_sample'])==25

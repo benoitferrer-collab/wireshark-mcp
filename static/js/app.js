@@ -6802,7 +6802,9 @@ Réponds STRICTEMENT en JSON:
     // ==================== HTTP DISPLAY ====================
 
     displayHttpResults(http) {
-        http = this.applyGlobalFilterToHttp(http || {});
+        const tlsView=this.tlsHttpView;
+        if(tlsView?.task===this.currentTaskId&&tlsView.http)http=tlsView.http;
+        http = http?.source==='decrypted_tls'?http:this.applyGlobalFilterToHttp(http || {});
         const signature = this.buildHttpRenderSignature(http);
         const httpSummary = http.summary || {};
         const reqCount = Number(httpSummary.total_requests || (Array.isArray(http.requests) ? http.requests.length : 0));
@@ -6892,6 +6894,11 @@ Réponds STRICTEMENT en JSON:
         this.populateSniHostsTable(http?.tls?.sni_hosts || []);
         this.populateHttpRequestsTable(requests);
         this.populateHttpAnomaliesTable(http.anomalies || []);
+        if(http.source==='decrypted_tls'){
+            const hint=document.getElementById('httpDataHint');if(hint)hint.textContent=http.coverage_note;
+            const ua=document.querySelector('#userAgentsTable tbody');if(ua)ua.innerHTML='<tr><td colspan="3" class="empty-state">User-Agents non conservés dans le rapport TLS déchiffré.</td></tr>';
+            const anomalies=document.querySelector('#httpAnomaliesTable tbody');if(anomalies)anomalies.innerHTML='<tr><td colspan="4" class="empty-state">Diagnostic des anomalies de l’analyse initiale : sélectionnez cette source pour les consulter.</td></tr>';
+        }
         this.setMenuHealthStatus('http', (reqCount > 0 || tlsCount > 0) ? 'ok' : 'missing', (reqCount > 0 || tlsCount > 0) ? `${reqCount.toLocaleString('fr-FR')} HTTP / ${tlsCount.toLocaleString('fr-FR')} TLS` : 'Aucune donnée HTTP/TLS');
     }
 

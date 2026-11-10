@@ -7,9 +7,10 @@ from fastapi import APIRouter,Request,HTTPException,UploadFile,File,Form,Query
 from mcp_gateway.policy import page_value
 from app.cloud.jobs import valid_id
 from .secrets import LIMITS
+from .http_summary import http_summary
 
 
-def public_view(service,capture,offset=0,limit=25):
+def public_view(service,capture,offset=0,limit=25,*,include_http_summary=False):
     valid_id(capture)
     job=service.current(capture)
     if not job:return {'status':'not_requested','report':None}
@@ -23,7 +24,7 @@ def public_view(service,capture,offset=0,limit=25):
     result['attempt']=progress.get('attempt',0)
     result['stage']=progress.get('stage','queued' if job['status']=='queued' else job['status'])
     report=service.report(job)
-    result['report']={**{k:v for k,v in report.items() if k!='rows'},**page_value(report.get('rows',[]),offset=offset,limit=limit)} if report else None
+    result['report']={**{k:v for k,v in report.items() if k!='rows'},**({'http_summary':http_summary(report)} if include_http_summary else {}),**page_value(report.get('rows',[]),offset=offset,limit=limit)} if report else None
     return result
 
 
@@ -64,6 +65,6 @@ def create_tls_router(service,sender=None,storage=None):
     @router.get('/api/identity/tls/{capture}')
     def report(capture:str,request:Request,offset:int=Query(0,ge=0),limit:int=Query(25,ge=1,le=25)):
         identity(request)
-        try:return public_view(service,capture,offset,limit)
+        try:return public_view(service,capture,offset,limit,include_http_summary=True)
         except ValueError:raise HTTPException(400,'Identifiant ou pagination invalide.') from None
     return router

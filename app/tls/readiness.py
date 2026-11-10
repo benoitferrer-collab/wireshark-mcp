@@ -46,6 +46,7 @@ def summarize(rows,kind,truncated=False):
     return {'state':state,'message':messages[state],'kind':kind,'observed_sessions':len(sessions),
             'rsa_candidates':counts['rsa_candidate'],'keylog_required':counts['keylog_required'],'unknown':counts['unknown'],
             'sessions':list(sessions.values())[:25],
+            'version_counts':{v:sum(s['version']==v for s in sessions.values()) for v in {s['version'] for s in sessions.values()}},
             'coverage':{'scope':'ServerHello observés uniquement ; les autres sessions restent indéterminées.',
                         'truncated':truncated,'display_limit':25},
             'limitations':['Ce contrôle ne lit aucun secret et ne prouve pas que la clé correspond.',
