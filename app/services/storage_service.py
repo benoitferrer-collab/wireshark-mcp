@@ -362,6 +362,8 @@ class StorageService:
         """Supprime une analyse et ses fichiers associés"""
         try:
             _validate_task_id(task_id)
+            if getattr(self, 'diagnosis_feedback_store', None):
+                self.diagnosis_feedback_store.delete_capture(task_id)
             # Invalider les caches (résultats + analyses dérivées + historique)
             self._results_cache.invalidate(task_id)
             self._history_cache = None

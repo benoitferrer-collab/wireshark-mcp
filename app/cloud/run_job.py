@@ -8,7 +8,7 @@ from .context import scratch
 from .jobs import valid_id, validate_capture, MAX_FILE, JobService
 
 
-def execute(task_id):
+def execute(task_id, root=None):
     from app.services.storage_service import storage_service as storage
     from app.services.pcap_service import PCAPAnalysisService
     task_id = valid_id(task_id)
@@ -17,7 +17,8 @@ def execute(task_id):
     if storage.deleted(task_id): return
     job = objects.read_json(f'jobs/{task_id}.json')
     if not job: raise ValueError('Missing analysis manifest')
-    root = Path(tempfile.mkdtemp(prefix='pcap-worker-'))
+    root = Path(root) if root else Path(tempfile.mkdtemp(prefix='pcap-worker-'))
+    root.mkdir(parents=True,exist_ok=True)
     marker = scratch.set(root)
     try:
         paths = []
@@ -43,4 +44,4 @@ def execute(task_id):
         scratch.reset(marker)
         shutil.rmtree(root, ignore_errors=True)
 
-if __name__ == '__main__': execute(sys.argv[1])
+if __name__ == '__main__': execute(sys.argv[1],sys.argv[2] if len(sys.argv)>2 else None)

@@ -1,0 +1,11 @@
+# Live MCP activity and internal capture sharing
+
+User wants live MCP requests with connected AI logos and capture sharing for second opinions. Implement completed tool-call feed polling every5s only when page visible, branded cards from exact OAuth client attribution, stable event IDs/new-call highlighting, success/errors/duration/time, paused/live controls and honest collection/staleness labels. Registry allows server configuration of client→provider; LiteLLM remains a proxy, never inferred underlying LLM. Unknown clients remain generic. Poll health probe caches30s; no prompts, arguments or PCAP content added to telemetry. Logos local only with source credits.
+
+Sharing: user clarification about external access pending. Safest authorized scope is existing Azure group: copy an authenticated deep link to capture/current tab, optionally packet by existing evidence links. No public URL/token or permission change. Explain shared workspace scope, recipient requires existing access, and sharing does not restrict other capture visibility. Browser clipboard failure gives selectable link. Do not send messages to colleagues.
+
+Tests: registry allowlist validation, event IDs/dedup, activity retry preserving previous observations and no overlapping polling, link construction strips demo/query state and validates task/tab, auth gates. Browser proof and independent review, complete suites, existing Vercel release and branch push.
+
+Completed implementation and checks: 207 Python +41 JS tests passed, static build and diff-check passed. Reviewer identified return-state loss; fixed with validated internal task/view through encrypted OAuth flow and regression test. Browser verified capture share dialog and clipboard success on synthetic data. Authenticated production live activity not exercised; no fabricated calls or sample counters added. Unknown clients remain generic. No access/group policy changes.
+
+Released: deployment dpl_6XZteLYVL7d4sfwsf2CL3BbitN7X READY on wireshark-mcp.vercel.app. Identity UI/activity model/sharing JS hashes matched source; anonymous activity/history/MCP returned401. Production anonymous capture link preserved task/view on login landing. No real authenticated activity requests were simulated. User confirmed sharing only with existing Azure group.

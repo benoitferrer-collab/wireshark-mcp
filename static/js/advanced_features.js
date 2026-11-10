@@ -278,6 +278,7 @@ async function advAnalyzeTcpHealthWithAI(taskId) {
         advSetTcpHealthAiStatus('Aucune analyse en cours.', 'error');
         return;
     }
+    if (window.PcapAI?.handoff({currentTaskId: realTaskId, showToast: (...args) => window.analyzer?.showToast(...args)}, 'tcp-health')) return;
     if (_advTcpHealthAiPending.has(realTaskId)) return;
 
     const data = _advTcpHealthCache.get(realTaskId);
@@ -1369,10 +1370,10 @@ function advBuildTcpHealthFocusCatalog(data) {
             }
         },
         culprits: {
-            title: '🕵️ Focus Coupables Probables',
+            title: '🕵️ Focus Équipements à vérifier',
             description: 'Classement des équipements/IP les plus corrélés aux symptômes.',
             kpis: [
-                { label: 'Coupables candidats', value: `${culpritsCount}` },
+                { label: 'Équipements candidats', value: `${culpritsCount}` },
                 { label: 'Health score', value: `${healthScore.toFixed(1)}/100` },
                 { label: 'RTT p95', value: `${p95.toFixed(2)} ms` },
                 { label: 'Jitter', value: `${jitter.toFixed(2)} ms` }
@@ -1384,7 +1385,7 @@ function advBuildTcpHealthFocusCatalog(data) {
                 healthScore < 45
                     ? 'Santé TCP dégradée: prioriser les équipements top scorés.'
                     : (healthScore < 70 ? 'Santé TCP intermédiaire: surveiller les top suspects.' : 'Santé TCP correcte.'),
-                'Vérifier en priorité les causes avec confiance la plus élevée.'
+                'Vérifier les pistes les mieux classées ; leur score ne prouve pas la causalité.'
             ],
             chart: bar(
                 'Santé/Coupables',
@@ -1682,7 +1683,7 @@ function advRenderTcpHealthTables(data, focusKey = 'sessions') {
             <span class="adv-rec-num">${idx + 1}</span>
             <p>
                 <strong>${advEscape(row.culprit || '-')}</strong>
-                (${advEscape(row.vendor || 'Inconnu')}) • confiance ${advNum(row.confidence, 0)}%<br>
+                (${advEscape(row.vendor || 'Inconnu')}) • score heuristique ${advNum(row.confidence, 0)}/100<br>
                 <span style="color:var(--text-muted)">${advEscape(row.top_cause || 'Cause non déterminée')} — ${advEscape(row.evidence || '')}</span>
             </p>
         </div>
@@ -1691,7 +1692,7 @@ function advRenderTcpHealthTables(data, focusKey = 'sessions') {
         ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Constructeurs les plus impactés</h4>${vendors}</div>`
         : '';
     const culpritsHtml = culpritRows
-        ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Coupables probables (root-cause matrix)</h4>${culpritRows}</div>`
+        ? `<div class="adv-health-rec-list"><h4 style="margin-bottom:8px;">Équipements à vérifier en priorité</h4><p class="support-evidence-note">Classement heuristique des signaux observés. Le score n’est pas une probabilité de responsabilité ; le point de capture et les journaux doivent confirmer l’hypothèse.</p>${culpritRows}</div>`
         : '';
     advSetHTML(
         'tcpHealthDiagnosis',
@@ -1849,7 +1850,7 @@ async function loadTcpHealth(taskId, forceRefresh = false) {
             ${metricCard('RTT Spread', `${rttRange.toFixed(1)} ms`, '🌡️', rttRange >= 100 ? 'adv-metric-warning' : '', 'data-tcp-focus="rtt"')}
             ${metricCard(`Risque Goulot ${advHealthPill(sum.bottleneck_level)}`, `${bottleneckScore}/100`, '🧠', bottleneckClass, 'data-tcp-focus="bottleneck"')}
             ${metricCard('Health Score', `${healthScore.toFixed(1)}/100`, '🧭', healthScore < 45 ? 'adv-metric-danger' : (healthScore < 70 ? 'adv-metric-warning' : ''), 'data-tcp-focus="culprits"')}
-            ${metricCard('Coupables probables', culpritCount, '🕵️', culpritCount > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="culprits"')}
+            ${metricCard('Équipements à vérifier', culpritCount, '🕵️', culpritCount > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="culprits"')}
             ${metricCard('Équipements touchés', advNum(sum.problematic_macs_count, 0), '🧩', advNum(sum.problematic_macs_count, 0) > 0 ? 'adv-metric-warning' : '', 'data-tcp-focus="infra"')}
             ${metricCard('Broadcast', `${advNum(sum.broadcast_percentage, 0).toFixed(2)}%`, '📣', advNum(sum.broadcast_percentage, 0) >= 2 ? 'adv-metric-warning' : '', 'data-tcp-focus="infra"')}
         </div>`);
@@ -1877,117 +1878,110 @@ async function loadTcpHealth(taskId, forceRefresh = false) {
 // 7. IR Playbook
 // ─────────────────────────────────────────────────────────
 
+let _advPlaybookRequest = 0;
+function advPlaybookProgressKey(taskId, playbookId) {
+    return 'nomios.playbook.' + encodeURIComponent(taskId) + '.' + encodeURIComponent(playbookId);
+}
+
+async function loadSupportPlaybookCatalog() {
+    const select = document.getElementById('playbookScenario');
+    const message = document.getElementById('playbookCatalogStatus');
+    if (!select) return;
+    try {
+        const response = await fetch('/api/playbooks/catalog', {signal: AbortSignal.timeout(10000)});
+        if (!response.ok) throw new Error('Catalogue indisponible');
+        const data = await response.json();
+        const groups = {transverse:'Qualification', reseau:'Réseau & performance', cyber:'Cybersécurité'};
+        for (const [key, name] of Object.entries(groups)) {
+            const group = document.createElement('optgroup'); group.label = name;
+            for (const item of data.playbooks.filter(row => row.category === key)) {
+                const option = document.createElement('option'); option.value = item.id; option.textContent = item.name;
+                group.append(option);
+            }
+            select.append(group);
+        }
+        if (message) message.textContent = `${data.playbooks.length} parcours disponibles. Choisissez un parcours ou laissez l’application suggérer des pistes à partir des mesures.`;
+    } catch (_) {
+        if (message) message.textContent = 'Catalogue indisponible. Les suggestions automatiques restent accessibles ; actualisez pour réessayer le choix manuel.';
+    }
+}
+document.addEventListener('DOMContentLoaded', loadSupportPlaybookCatalog);
+
+function advRenderSupportPlaybooks(playbooks, taskId) {
+    return playbooks.map((pb, index) => {
+        const key = advEscape(advPlaybookProgressKey(taskId, pb.playbook_id));
+        const phases = (pb.phases || []).map((phase, phaseIndex) => `<section class="pb-phase">
+            <h4 class="pb-phase-title">${advEscape(phase.phase || 'Étape')}</h4>
+            <div class="pb-tasks">${(phase.tasks || []).map((task, taskIndex) => `<label class="pb-task">
+                <input type="checkbox" class="pb-checkbox" data-task="${phaseIndex}-${taskIndex}" onchange="advUpdateProgress(this)">
+                <span class="pb-task-text">${advEscape(task)}</span></label>`).join('')}</div></section>`).join('');
+        return `<article class="pb-card" data-progress-key="${key}">
+            <header class="pb-header"><span class="pb-type-badge">${pb.selection_basis === 'manual' ? 'CHOIX DE L’INGÉNIEUR' : 'PARCOURS SUGGÉRÉ'}</span>
+                <h3 class="pb-title">${advEscape(pb.name)}</h3><p>${advEscape(pb.description)}</p>
+                <div class="pb-progress-wrap"><div class="pb-progress-bar"><div class="pb-progress-fill" style="width:0%"></div></div>
+                <span class="pb-progress-text" role="status">0 / ${Number(pb.total_tasks) || 0} étapes cochées</span></div></header>
+            <p class="pb-context">${advEscape(pb.selection_reason)}</p>${phases}
+            <footer class="pb-footer">Checklist proposée · à adapter aux procédures du client · progression locale au navigateur</footer></article>`;
+    }).join('');
+}
+
 async function generatePlaybook(taskId) {
     if (!taskId) return;
+    const request = ++_advPlaybookRequest;
+    const current = () => request === _advPlaybookRequest && (!window.analyzer || window.analyzer.currentTaskId === taskId);
     const btn = document.getElementById('generatePlaybookBtn');
-    const loadingEl = document.getElementById('playbook-loading');
+    const loading = document.getElementById('playbook-loading');
+    const choice = document.getElementById('playbookScenario')?.value || 'auto';
     if (btn) btn.disabled = true;
-    if (loadingEl) loadingEl.style.display = '';
-
+    if (loading) loading.style.display = '';
     try {
-        const resp = await fetch(`/api/${taskId}/generate-playbook`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+        const response = await fetch(`/api/${encodeURIComponent(taskId)}/generate-playbook`, {
+            method:'POST', headers:{'Content-Type':'application/json'}, signal:AbortSignal.timeout(15000),
+            body:JSON.stringify(choice === 'auto' ? {} : {incident_types:[choice]})
         });
-        const data = await resp.json();
-
-        const playbooks = data.playbooks || [];
-        if (!playbooks.length) {
-            advSetHTML('playbook-content', advEmptyState('Aucun playbook généré. Lancez une analyse d\'abord.'));
-            return;
-        }
-
-        const priorityColors = { CRITICAL: '#ff4444', HIGH: '#ff8800', MEDIUM: '#ffbb33', LOW: '#27ae60' };
-
-        const html = playbooks.map((pb, idx) => {
-            const pColor = priorityColors[pb.priority] || '#888';
-            const phases = pb.phases || [];
-            const phasesHTML = phases.map(phase => {
-                const tasks = phase.tasks || [];
-                return `<div class="pb-phase">
-                    <h4 class="pb-phase-title"><span class="pb-phase-icon">${phase.icon || '📌'}</span> ${phase.name}</h4>
-                    <div class="pb-tasks">
-                        ${tasks.map((t, ti) => `
-                            <label class="pb-task" id="pbtask-${idx}-${phase.name}-${ti}">
-                                <input type="checkbox" class="pb-checkbox" onchange="advUpdateProgress(this)" data-playbook="${idx}">
-                                <span class="pb-task-text">${t}</span>
-                            </label>
-                        `).join('')}
-                    </div>
-                </div>`;
-            }).join('');
-
-            return `<div class="pb-card" id="pb-card-${idx}">
-                <div class="pb-header" style="border-left: 4px solid ${pColor}">
-                    <div class="pb-type-badge" style="background:${pColor}">${pb.incident_type || ''}</div>
-                    <h3 class="pb-title">${pb.title || ''}</h3>
-                    <div class="pb-meta">
-                        <span>⏱️ ${pb.estimated_time || ''}</span>
-                        <span>👥 ${(pb.required_roles || []).join(', ')}</span>
-                        <div class="pb-progress-wrap">
-                            <div class="pb-progress-bar"><div class="pb-progress-fill" id="pb-prog-${idx}" style="width:0%"></div></div>
-                            <span class="pb-progress-text" id="pb-prog-text-${idx}">0%</span>
-                        </div>
-                    </div>
-                </div>
-                ${pb.context ? `<div class="pb-context"><strong>🎯 Contexte:</strong> ${pb.context}</div>` : ''}
-                ${pb.iocs && pb.iocs.length ? `<div class="pb-iocs"><strong>🔴 IoCs:</strong> ${pb.iocs.slice(0, 5).map(i => `<code>${i}</code>`).join(' ')}</div>` : ''}
-                <div class="pb-phases">${phasesHTML}</div>
-                <div class="pb-footer">
-                    <span>MITRE: ${(pb.mitre_techniques || []).slice(0, 5).map(m => `<code>${m}</code>`).join(' ')}</span>
-                </div>
-            </div>`;
-        }).join('');
-
-        advSetHTML('playbook-content', html);
-
-        // Restore checkbox states from localStorage
+        if (!response.ok) throw new Error('Impossible de préparer les checklists. Vérifiez votre accès puis réessayez.');
+        const data = await response.json();
+        if (!current()) return;
+        advSetHTML('playbook-content', advRenderSupportPlaybooks(data.playbooks || [], taskId));
         advRestorePlaybookProgress();
-
-    } catch (e) {
-        advSetHTML('playbook-content', `<div class="adv-error">❌ Erreur: ${e.message}</div>`);
+    } catch (error) {
+        if (current()) advSetHTML('playbook-content', `<p class="adv-error">${advEscape(error.message)}</p>`);
     } finally {
-        if (btn) btn.disabled = false;
-        if (loadingEl) loadingEl.style.display = 'none';
+        if (request === _advPlaybookRequest) {
+            if (btn) btn.disabled = false;
+            if (loading) loading.style.display = 'none';
+        }
     }
 }
 
-function advUpdateProgress(checkbox) {
+function advUpdateProgress(checkbox, persist = true) {
     const card = checkbox.closest('.pb-card');
     if (!card) return;
-    const idx = card.id.replace('pb-card-', '');
     const all = card.querySelectorAll('.pb-checkbox');
     const checked = card.querySelectorAll('.pb-checkbox:checked');
-    const pct = all.length ? Math.round((checked.length / all.length) * 100) : 0;
-
-    const fill = document.getElementById(`pb-prog-${idx}`);
-    const text = document.getElementById(`pb-prog-text-${idx}`);
-    if (fill) fill.style.width = pct + '%';
-    if (text) text.textContent = pct + '%';
-
-    // Persist to localStorage
-    const key = `pbcheck_${idx}`;
-    const states = Array.from(all).map(c => c.checked);
-    localStorage.setItem(key, JSON.stringify(states));
+    const fill = card.querySelector('.pb-progress-fill');
+    const text = card.querySelector('.pb-progress-text');
+    if (fill) fill.style.width = (all.length ? Math.round(checked.length / all.length * 100) : 0) + '%';
+    if (text) text.textContent = `${checked.length} / ${all.length} étapes cochées`;
+    if (persist) { try { localStorage.setItem(card.dataset.progressKey, JSON.stringify(Array.from(all).map(box => box.checked))); } catch (_) {} }
 }
 
 function advRestorePlaybookProgress() {
     document.querySelectorAll('.pb-card').forEach(card => {
-        const idx = card.id.replace('pb-card-', '');
-        const key = `pbcheck_${idx}`;
-        const saved = localStorage.getItem(key);
-        if (!saved) return;
-        const states = JSON.parse(saved);
-        const checkboxes = card.querySelectorAll('.pb-checkbox');
-        states.forEach((state, i) => {
-            if (checkboxes[i]) checkboxes[i].checked = state;
-        });
-        // Trigger progress update
-        const fakeEl = { closest: () => card };
-        advUpdateProgress(fakeEl);
+        let states;
+        try { states = JSON.parse(localStorage.getItem(card.dataset.progressKey) || '[]'); } catch (_) { return; }
+        if (!Array.isArray(states)) return;
+        card.querySelectorAll('.pb-checkbox').forEach((box, index) => { box.checked = states[index] === true; });
+        advUpdateProgress({closest:() => card}, false);
     });
 }
+
+document.addEventListener('pcap:analysis-loaded', () => {
+    ++_advPlaybookRequest;
+    advSetHTML('playbook-content', '');
+    const btn = document.getElementById('generatePlaybookBtn'); if (btn) btn.disabled = false;
+    const loading = document.getElementById('playbook-loading'); if (loading) loading.style.display = 'none';
+});
 
 // ─────────────────────────────────────────────────────────
 // DFIR Export handlers

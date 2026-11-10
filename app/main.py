@@ -96,10 +96,28 @@ class CachedStaticFiles(StaticFiles):
 @app.get('/static/js/runtime-config.js', include_in_schema=False)
 async def runtime_config():
     import json
-    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE}
+    config = {'cloudMode': CLOUD_MODE, 'requiresAccessKey': CLOUD_MODE and not WEB_IDENTITY, 'webAuth': bool(WEB_IDENTITY), 'tlsDecryption': bool(TLS_SERVICE)}
     return Response('window.PCAP_CONFIG = ' + json.dumps(config) + ';',
                     media_type='application/javascript', headers={'Cache-Control': 'no-store'})
 
+
+# Identity is opt-in, with mandatory complete configuration when enabled.
+from app.identity.settings import WebSettings
+WEB_IDENTITY = WebSettings.from_env()
+TLS_SERVICE = None
+if WEB_IDENTITY:
+    from app.identity.store import IdentityStore
+    from app.identity.web import EntraProvider, WebIdentityMiddleware, create_identity_router
+    identity_store = IdentityStore(WEB_IDENTITY.database_url, WEB_IDENTITY.encryption_key)
+    if CLOUD_MODE and os.getenv('TLS_SECRETS_ENCRYPTION_KEY'):
+        from app.tls.jobs import TLSJobs
+        from app.tls.routes import create_tls_router
+        TLS_SERVICE = TLSJobs(identity_store, storage_service.objects, os.environ['TLS_SECRETS_ENCRYPTION_KEY'])
+        storage_service.tls_jobs = TLS_SERVICE
+        app.include_router(create_tls_router(TLS_SERVICE,storage=storage_service))
+    identity_provider = EntraProvider(WEB_IDENTITY)
+    app.include_router(create_identity_router(WEB_IDENTITY, identity_store, identity_provider, maintenance_hook=TLS_SERVICE.prune if TLS_SERVICE else None))
+    app.add_middleware(WebIdentityMiddleware, settings=WEB_IDENTITY, store=identity_store, provider=identity_provider)
 
 static_path = Path(__file__).parent.parent / "static"
 app.mount("/static", CachedStaticFiles(directory=str(static_path)), name="static")
@@ -121,7 +139,21 @@ if CLOUD_MODE:
 app.include_router(api_router)
 app.include_router(additional_router)
 app.include_router(team_router)
-app.include_router(create_mcp_router(storage_service))
+app.include_router(create_mcp_router(storage_service, tls_service=TLS_SERVICE))
+from app.security_page import create_security_router
+app.include_router(create_security_router(WEB_IDENTITY))
+from app.demo import create_demo_router
+app.include_router(create_demo_router(storage_service))
+from app.services.transaction_service import create_transaction_router
+app.include_router(create_transaction_router(storage_service))
+from app.services.support_protocols import create_support_protocol_router
+app.include_router(create_support_protocol_router(storage_service))
+from app.services.diagnosis_feedback import DiagnosisFeedbackStore
+from app.services.support_diagnosis_routes import create_support_diagnosis_router
+diagnosis_feedback_store = DiagnosisFeedbackStore(identity_store=identity_store) if WEB_IDENTITY else (
+    DiagnosisFeedbackStore(local_path=storage_service.upload_dir / 'support-feedback.sqlite3') if not CLOUD_MODE else None)
+storage_service.diagnosis_feedback_store = diagnosis_feedback_store
+app.include_router(create_support_diagnosis_router(storage_service, diagnosis_feedback_store, WEB_IDENTITY, local_mode=not CLOUD_MODE and not WEB_IDENTITY))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -134,6 +166,25 @@ async def root(request: Request):
         return int(path.stat().st_mtime) if path.exists() else settings.app_version
 
     assets_version = {
+        "tls_js": _asset_version("js", "tls-decryption.js"),
+        "tls_css": _asset_version("css", "tls-decryption.css"),
+        "activity_js": _asset_version("js", "activity-model.js"),
+        "engines_js": _asset_version("js", "ai-engines.js"),
+        "transactions_js": _asset_version("js", "transactions.js"),
+        "transactions_css": _asset_version("css", "transactions.css"),
+        "protocols_js": _asset_version("js", "support-protocols.js"),
+        "protocols_css": _asset_version("css", "support-protocols.css"),
+        "diagnosis_js": _asset_version("js", "support-diagnosis.js"),
+        "diagnosis_css": _asset_version("css", "support-diagnosis.css"),
+        "sharing_js": _asset_version("js", "capture-sharing.js"),
+        "demo_js": _asset_version("js", "demo-tour.js"),
+        "support_css": _asset_version("css", "support-workspace.css"),
+        "support_js": _asset_version("js", "support-workspace.js"),
+        "engineering_css": _asset_version("css", "engineering.css"),
+        "engineering_js": _asset_version("js", "engineering-ui.js"),
+        "evidence_js": _asset_version("js", "evidence-links.js"),
+        "nomios_css": _asset_version("css", "nomios.css"),
+        "identity_ui_js": _asset_version("js", "identity-ui.js"),
         "advanced_features_js": _asset_version("js", "advanced_features.js"),
         "app_js": _asset_version("js", "app.js"),
         "connection_js": _asset_version("js", "connection.js"),
@@ -147,7 +198,8 @@ async def root(request: Request):
             "app_name": settings.app_name,
             "version": settings.app_version,
             "assets_version": assets_version,
-            "max_file_size_gb": settings.max_file_size / (1024**3)
+            "max_file_size_gb": settings.max_file_size / (1024**3),
+            "max_file_size_label": f"{settings.max_file_size / (1024**2):g} Mo" if settings.max_file_size < 1024**3 else f"{settings.max_file_size / (1024**3):g} Go"
         }
     )
 

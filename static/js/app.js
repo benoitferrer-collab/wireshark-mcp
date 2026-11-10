@@ -29,10 +29,8 @@ class VirtualScroll {
         // Recalculer le nombre de lignes visibles quand la fenêtre change de taille
         this.resizeHandler = () => {
             const count = Math.ceil(this.container.offsetHeight / this.rowHeight) + 5;
-            if (count !== this.visibleCount) {
-                this.visibleCount = count;
-                this.render();
-            }
+            this.visibleCount = count;
+            this.render();
         };
         window.addEventListener('resize', this.resizeHandler, { passive: true });
     }
@@ -63,15 +61,22 @@ class VirtualScroll {
         const startIndex = Math.max(0, Math.floor(scrollTop / this.rowHeight) - 2);
         const endIndex = Math.min(total, startIndex + this.visibleCount + 4);
 
-        this.spacer.style.height = `${total * this.rowHeight}px`;
+        const table = this.tbody.closest('table');
+        const headerHeight = table?.querySelector('thead')?.getBoundingClientRect().height || 0;
+        const columnWidths = Array.from(table?.querySelectorAll('thead th') || []).map(th => th.getBoundingClientRect().width);
+        this.spacer.style.height = `${total * this.rowHeight + headerHeight}px`;
 
         // Construire hors DOM puis remplacer en une opération
         const fragment = document.createDocumentFragment();
         for (let i = startIndex; i < endIndex; i++) {
             const row = this.renderFn(this.filteredData[i], i);
             row.style.position = 'absolute';
-            row.style.top = `${i * this.rowHeight}px`;
+            row.style.top = `${i * this.rowHeight + headerHeight}px`;
             row.style.width = '100%';
+            if (columnWidths.length) {
+                row.style.display = 'grid';
+                row.style.gridTemplateColumns = columnWidths.map(width => `${width}px`).join(' ');
+            }
             fragment.appendChild(row);
         }
         this.tbody.replaceChildren(fragment);
@@ -93,7 +98,7 @@ class PCAPAnalyzer {
         this.chatbotOpen = false;
         this.guidedProblems = [];
         this.guidedQuestions = [];
-        this.autoQuestionnaireEnabled = true;
+        this.autoQuestionnaireEnabled = false;
         this.autoQuestionnaireInProgress = false;
         this.autoQuestionnaireDoneForTask = '';
         this.autoQuestionnaireTimer = null;
@@ -537,8 +542,8 @@ class PCAPAnalyzer {
     getThemeColors() {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         return {
-            primary: '#0ea5a4',
-            accent: '#f97316',
+            primary: '#5d9bff',
+            accent: '#a18bfa',
             success: '#10b981',
             warning: '#f59e0b',
             danger: '#ef4444',
@@ -1335,6 +1340,7 @@ Réponds STRICTEMENT en JSON:
     // ==================== AI ANALYSIS BUTTONS ====================
 
     async analyzeWithAI(context) {
+        if (window.PcapAI?.handoff(this, context)) return;
         if (!this.currentTaskId) {
             this.showToast('warning', 'Pas d\'analyse', 'Veuillez d\'abord analyser un fichier PCAP');
             return;
@@ -1419,7 +1425,7 @@ Réponds STRICTEMENT en JSON:
         // Ollama config menu
         const ollamaConfigBtn = document.getElementById('ollamaConfigBtn');
         if (ollamaConfigBtn) {
-            ollamaConfigBtn.addEventListener('click', () => this.openOllamaConfigMenu());
+            ollamaConfigBtn.addEventListener('click', () => window.PcapAI ? window.PcapAI.openSettings() : this.openOllamaConfigMenu());
         }
         const ollamaStatus = document.getElementById('ollamaStatus');
         if (ollamaStatus) {
@@ -1445,6 +1451,9 @@ Réponds STRICTEMENT en JSON:
         if (guidedAskTopBtn) {
             guidedAskTopBtn.addEventListener('click', () => this.askTopGuidedQuestion());
         }
+
+        const guidedRunBtn = document.getElementById('guidedRunBtn');
+        if (guidedRunBtn) guidedRunBtn.addEventListener('click', () => this.runAutoQuestionnaire(true));
 
         // Streams filters
         const streamIpFilter = document.getElementById('streamIpFilter');
@@ -1675,18 +1684,19 @@ Réponds STRICTEMENT en JSON:
             tab.setAttribute('tabindex', tab.classList.contains('active') ? '0' : '-1');
             tab.addEventListener('keydown', (e) => {
                 const key = e.key;
-                if (!['ArrowRight', 'ArrowLeft', 'Home', 'End', 'Enter', ' '].includes(key)) return;
+                if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', ' '].includes(key)) return;
                 e.preventDefault();
                 if (key === 'Enter' || key === ' ') {
-                    const tabId = e.currentTarget?.dataset?.tab;
-                    if (tabId) this.switchTab(tabId);
+                    e.currentTarget.click();
                     return;
                 }
                 let nextIdx = idx;
-                if (key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
-                if (key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+                if (key === 'ArrowRight' || key === 'ArrowDown') nextIdx = (idx + 1) % tabs.length;
+                if (key === 'ArrowLeft' || key === 'ArrowUp') nextIdx = (idx - 1 + tabs.length) % tabs.length;
                 if (key === 'Home') nextIdx = 0;
                 if (key === 'End') nextIdx = tabs.length - 1;
+                const group = tabs[nextIdx]?.closest('.nomios-nav-group');
+                if (group) group.open = true;
                 tabs[nextIdx]?.focus();
             });
             tab.addEventListener('click', (e) => {
@@ -1866,13 +1876,15 @@ Réponds STRICTEMENT en JSON:
 
         console.log('🔄 Changement d\'onglet vers:', normalizedTabId);
         this.currentTabId = normalizedTabId;
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch;
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch || Boolean(document.querySelector('.nomios-module-nav'));
         const resultsSection = document.getElementById('resultsSection');
 
         // Update tab buttons
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         const targetTab = document.querySelector(`.tab[data-tab="${normalizedTabId}"]`);
         if (targetTab) {
+            const group = targetTab.closest('.nomios-nav-group');
+            if (group) group.open = true;
             targetTab.classList.add('active');
             const reduceMotionTab = window.matchMedia('(prefers-reduced-motion: reduce)').matches || rapidSwitch;
             try {
@@ -1921,6 +1933,7 @@ Réponds STRICTEMENT en JSON:
             this.bindInteractiveSpotlights(targetContent || document);
             this.applyFocusInvestigation();
             this.requestChartsResize(2);
+            if (targetContent && document.querySelector('.nomios-module-nav')) targetContent.scrollIntoView({block:'start',behavior:'auto'});
         };
 
         if (!reduceMotion && currentContent && targetContent && currentContent !== targetContent) {
@@ -1967,6 +1980,10 @@ Réponds STRICTEMENT en JSON:
             this.setMenuHealthStatus('multi-pcap', this.multiPcapResults ? 'ok' : 'missing', this.multiPcapResults ? 'Résultats multi-PCAP disponibles' : 'Chargez plusieurs PCAP puis lancez la corrélation');
             this.renderMultiPcapCaptureTable();
             this.renderMultiPcapResults();
+        } else if (tabId.startsWith('protocol-') && this.currentTaskId) {
+            window.PcapSupportProtocols?.load(tabId, this.currentTaskId);
+        } else if (tabId === 'transactions' && this.currentTaskId) {
+            window.PcapTransactions?.load(this.currentTaskId);
         } else if (tabId === 'timeline' && this.currentResults) {
             console.log('🕐 Chargement de la timeline...');
             this.setMenuHealthStatus('timeline', 'loading', 'Chargement timeline...');
@@ -1977,6 +1994,7 @@ Réponds STRICTEMENT en JSON:
             } else {
                 this.setMenuHealthStatus('playbook', 'idle', 'Lancez la génération du playbook');
             }
+            if (tabId === 'tcp-health') window.PcapSupportProtocols?.health(this.currentTaskId);
             if (typeof advOnTabActivated === 'function') {
                 advOnTabActivated(tabId, this.currentTaskId);
             }
@@ -2035,6 +2053,10 @@ Réponds STRICTEMENT en JSON:
     // ==================== FILE UPLOAD ====================
 
     async uploadFile(file) {
+        const generation = this.captureRequestGeneration = (this.captureRequestGeneration || 0) + 1;
+        this.pollGeneration = (this.pollGeneration || 0) + 1;
+        if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
+        document.dispatchEvent(new CustomEvent('pcap:upload-start'));
         document.getElementById('uploadArea').style.display = 'none';
         document.getElementById('progressContainer').style.display = 'block';
         document.getElementById('progressFileName').textContent = file.name;
@@ -2058,7 +2080,9 @@ Réponds STRICTEMENT en JSON:
             }
 
             const data = await response.json();
+            if (generation !== this.captureRequestGeneration) return;
             this.currentTaskId = data.task_id;
+            document.dispatchEvent(new CustomEvent('pcap:upload-queued', {detail:{taskId:data.task_id}}));
             this.renderSignatures = { dns: '', http: '' };
             this.streamsLoadedKey = '';
             this.packetsLoadedTaskId = '';
@@ -2074,6 +2098,8 @@ Réponds STRICTEMENT en JSON:
             this.startStatusPolling();
 
         } catch (error) {
+            if (generation !== this.captureRequestGeneration) return;
+            document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
             console.error('Upload error:', error);
             this.showToast('error', 'Erreur Upload', error.message);
             this.showError(error.message);
@@ -2082,38 +2108,47 @@ Réponds STRICTEMENT en JSON:
     }
 
     startStatusPolling() {
-        if (this.pollInterval) {
-            clearInterval(this.pollInterval);
-        }
-
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        const generation = this.pollGeneration = (this.pollGeneration || 0) + 1;
+        const taskId = this.currentTaskId;
+        let busy = false, failures = 0;
         this.pollInterval = setInterval(async () => {
-            // Stopper si l'analyse a été réinitialisée entre deux ticks
-            if (!this.currentTaskId) {
-                clearInterval(this.pollInterval);
-                this.pollInterval = null;
+            if (generation !== this.pollGeneration || taskId !== this.currentTaskId || !taskId) {
+                if (generation === this.pollGeneration) {
+                    clearInterval(this.pollInterval);
+                    this.pollInterval = null;
+                }
                 return;
             }
+            if (busy) return;
+            busy = true;
             try {
-                const response = await fetch(`/api/status/${this.currentTaskId}`);
+                const response = await fetch(`/api/status/${taskId}`, {signal: AbortSignal.timeout(15000)});
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
-
+                if (generation !== this.pollGeneration || taskId !== this.currentTaskId) return;
+                failures = 0;
                 this.updateProgress(data);
-
-                if (data.status === 'completed') {
+                if (data.status === 'completed' || data.status === 'failed') {
                     clearInterval(this.pollInterval);
                     this.pollInterval = null;
-                    this.showToast('success', 'Analyse terminée', 'Les résultats sont prêts !');
-                    this.loadResults();
-                } else if (data.status === 'failed') {
-                    clearInterval(this.pollInterval);
-                    this.pollInterval = null;
-                    this.showToast('error', 'Erreur', data.message || 'Erreur lors de l\'analyse');
-                    this.showError(data.message || 'Erreur lors de l\'analyse');
-                    this.resetUploadArea();
+                    if (data.status === 'completed') {
+                        this.showToast('success', 'Analyse terminée', 'Les résultats sont prêts.');
+                        await this.loadResults();
+                    } else {
+                        document.dispatchEvent(new CustomEvent('pcap:upload-failed'));
+                        this.showToast('error', 'Erreur', data.message || 'Erreur lors de l’analyse');
+                        this.showError(data.message || 'Erreur lors de l’analyse');
+                        this.resetUploadArea();
+                    }
                 }
             } catch (error) {
+                if (generation !== this.pollGeneration || taskId !== this.currentTaskId) return;
                 console.error('Status polling error:', error);
-            }
+                failures++;
+                const status = document.getElementById('progressStatus');
+                if (status) status.textContent = failures >= 3 ? 'Serveur temporairement indisponible. Nouvelle tentative automatique…' : 'Vérification du statut en cours…';
+            } finally { busy = false; }
         }, 1000);
     }
 
@@ -2129,6 +2164,24 @@ Réponds STRICTEMENT en JSON:
             progressStatus.textContent = data.message;
         }
 
+        let retry = document.getElementById('processingRetry');
+        if (data.waiting_delayed && !retry) {
+            retry = document.createElement('button');retry.id='processingRetry';retry.className='btn btn-secondary';retry.type='button';retry.textContent='Relancer la prise en charge';
+            progressStatus.after(retry);
+        }
+        if (retry) {
+            retry.hidden=!data.waiting_delayed;
+            const taskId=this.currentTaskId;
+            retry.onclick=async()=>{
+                retry.disabled=true;
+                try{
+                    const response=await fetch(`/api/identity/analysis/${encodeURIComponent(taskId)}/retry`,{method:'POST'});
+                    const result=await response.json();if(!response.ok)throw new Error(result.detail||'Relance indisponible');
+                    retry.hidden=true;progressStatus.textContent='Nouvelle prise en charge demandée.';
+                }catch(e){this.showToast('error','Traitement',e.message);}finally{retry.disabled=false;}
+            };
+        }
+
         if (data.status === 'completed') {
             progressFill.style.width = '100%';
             progressStatus.textContent = 'Analyse terminée!';
@@ -2136,10 +2189,14 @@ Réponds STRICTEMENT en JSON:
     }
 
     async loadResults() {
+        const taskId = this.currentTaskId;
+        const captureGeneration = this.captureRequestGeneration || 0;
+        const generation = this.resultsRequestGeneration = (this.resultsRequestGeneration || 0) + 1;
         try {
-            const response = await fetch(`/api/analysis/${this.currentTaskId}`);
+            const response = await fetch(`/api/analysis/${taskId}`, {signal: AbortSignal.timeout(30000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
-
+            if (taskId !== this.currentTaskId || generation !== this.resultsRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0)) return;
             this.currentResults = results;
 
             document.getElementById('progressContainer').style.display = 'none';
@@ -2148,10 +2205,14 @@ Réponds STRICTEMENT en JSON:
             this.displayResults(results);
             this.loadHistory();
 
+            // A restored tab may already be selected before the capture is loaded.
+            this.triggerTabDataLoad(this.currentTabId);
+
             // Double frame to let layout settle before chart resize
             this.requestChartsResize(2);
 
         } catch (error) {
+            if (taskId !== this.currentTaskId || generation !== this.resultsRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0)) return;
             console.error('Error loading results:', error);
             this.showToast('error', 'Erreur', 'Erreur lors du chargement des résultats');
             this.showError('Erreur lors du chargement des résultats');
@@ -2293,6 +2354,7 @@ Réponds STRICTEMENT en JSON:
             console.error('Problem spotlight render error:', spotlightError);
         }
         this.updateAnalysisMeta(results);
+        document.dispatchEvent(new CustomEvent('pcap:analysis-loaded'));
         this.updateNetworkVisualStateFromResults(results);
         this.refreshMenuHealthFromResults(results);
         this.applyPremiumEntrance();
@@ -2423,6 +2485,7 @@ Réponds STRICTEMENT en JSON:
     // ==================== AI INSIGHTS ====================
 
     async generateSpecificAI(type) {
+        if (window.PcapAI?.handoff(this, type)) return;
         if (!this.currentTaskId) {
             this.showToast('warning', 'Pas d\'analyse', 'Veuillez d\'abord analyser un fichier PCAP');
             return;
@@ -2576,6 +2639,10 @@ Réponds STRICTEMENT en JSON:
     // ==================== TIMELINE ====================
 
     async loadTimeline(filters = {}) {
+        const taskId = this.currentTaskId;
+        const generation = this.timelineRequestGeneration = (this.timelineRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.timelineRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) {
             console.error('❌ Pas de task_id');
             return;
@@ -2601,6 +2668,7 @@ Réponds STRICTEMENT en JSON:
             }
 
             const data = await response.json();
+            if (stale()) return;
             console.log('✅ Réponse timeline:', data);
 
             let timelineData = data.timeline || data;
@@ -2625,6 +2693,7 @@ Réponds STRICTEMENT en JSON:
             this.displayTimelineStats(timelineData.summary || {});
 
         } catch (error) {
+            if (stale()) return;
             console.error('❌ Erreur timeline:', error);
             const fallbackTimeline = this.buildTimelineFromPacketsIndex(this.currentResults?.packets_index || []);
             if (fallbackTimeline.events.length > 0) {
@@ -3051,29 +3120,21 @@ Réponds STRICTEMENT en JSON:
         if (!tbody) return;
 
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Aucun stream trouvé avec ces filtres.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Aucun stream trouvé avec ces filtres.</td></tr>';
             return;
         }
 
         tbody.innerHTML = rows.map(stream => `
             <tr>
-                <td>${stream.stream_id}</td>
-                <td><code>${this.escapeHtml(stream.src_endpoint)}</code></td>
-                <td><code>${this.escapeHtml(stream.dst_endpoint)}</code></td>
-                <td>${stream.packet_count.toLocaleString('fr-FR')}</td>
-                <td>${this.formatBytesShort(stream.total_bytes)}</td>
-                <td><span class="protocol-badge ${this.sanitizeClassToken(stream.type)}">${this.escapeHtml(stream.type)}</span></td>
-                <td><span class="state-badge ${this.sanitizeClassToken(stream.state || '')}">${this.escapeHtml(stream.state || '-')}</span></td>
-                <td>${stream.retransmissions.toLocaleString('fr-FR')}</td>
-                <td>${stream.rst_count.toLocaleString('fr-FR')}</td>
+                <td class="stream-id">#${stream.stream_id}</td>
+                <td class="stream-endpoints"><div><span class="endpoint-label">SRC</span><code>${this.escapeHtml(stream.src_endpoint)}</code></div><div><span class="endpoint-label">DST</span><code>${this.escapeHtml(stream.dst_endpoint)}</code></div></td>
+                <td class="stream-traffic"><strong>${stream.packet_count.toLocaleString('fr-FR')} <small>paquets</small></strong><span>${this.formatBytesShort(stream.total_bytes)}</span></td>
+                <td class="stream-connection"><span class="protocol-badge ${this.sanitizeClassToken(stream.type)}">${this.escapeHtml(stream.type)}</span><span class="state-badge ${this.sanitizeClassToken(stream.state || '')}">${this.escapeHtml(stream.state || '-')}</span></td>
+                <td class="stream-number">${stream.retransmissions.toLocaleString('fr-FR')}</td>
+                <td class="stream-number">${stream.rst_count.toLocaleString('fr-FR')}</td>
                 <td><span class="risk-badge ${this.sanitizeClassToken(stream.risk_level)}">${this.escapeHtml(stream.risk_level)}</span></td>
-                <td title="${this.escapeHtml(stream.cause_details || stream.probable_cause || '-')}">
-                    <span class="${this.getCauseBadgeClass(stream.probable_cause_code)}">${this.escapeHtml(this.truncate(stream.probable_cause || '-', 52))}</span>
-                </td>
-                <td>
-                    <button class="action-btn view" onclick='analyzer.showStreamDetails(${stream.stream_id}, ${JSON.stringify(stream.stream_identifier || "")})'>📦 Détails</button>
-                    <button class="action-btn view" onclick='analyzer.showIpSessionModal(${JSON.stringify(stream.src_ip)}, ${stream.stream_id})'>👁️ IP</button>
-                </td>
+                <td class="stream-cause" title="${this.escapeHtml(stream.cause_details || stream.probable_cause || '-')}"><span class="${this.getCauseBadgeClass(stream.probable_cause_code)}">${this.escapeHtml(stream.probable_cause || '-')}</span></td>
+                <td class="stream-actions"><div><button class="action-btn view" onclick='analyzer.showStreamDetails(${stream.stream_id}, ${this.escapeHtml(JSON.stringify(stream.stream_identifier || ""))})' aria-label="Détails du flux ${stream.stream_id}">Ouvrir <span aria-hidden="true">↗</span></button><button class="action-btn view stream-ip-action" onclick='analyzer.showIpSessionModal(${this.escapeHtml(JSON.stringify(stream.src_ip))}, ${stream.stream_id})' aria-label="Sessions IP du flux ${stream.stream_id}">IP</button></div></td>
             </tr>
         `).join('');
     }
@@ -3103,6 +3164,10 @@ Réponds STRICTEMENT en JSON:
     }
 
     async loadStreams(forceRefresh = false) {
+        const taskId = this.currentTaskId;
+        const generation = this.streamsRequestGeneration = (this.streamsRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.streamsRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) return;
 
         const tbody = document.querySelector('#streamsTable tbody');
@@ -3120,7 +3185,7 @@ Réponds STRICTEMENT en JSON:
             this.setMenuHealthStatus('streams', this.streamTotal > 0 ? 'ok' : 'missing', msg);
             return;
         }
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Chargement des streams...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:1rem;">Chargement des streams...</td></tr>';
 
         try {
             const params = new URLSearchParams();
@@ -3139,6 +3204,7 @@ Réponds STRICTEMENT en JSON:
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
+            if (stale()) return;
             const apiStreams = Array.isArray(data.streams) ? data.streams : [];
             const normalized = apiStreams.map((stream, idx) => this.normalizeStreamEntry(stream, idx));
             const displayed = normalized;
@@ -3153,11 +3219,12 @@ Réponds STRICTEMENT en JSON:
             this.updateStreamsPaginationControls(this.streamTotal || normalized.length, this.streamOffset, this.streamLimit);
             this.setMenuHealthStatus('streams', this.streamTotal > 0 ? 'ok' : 'missing', this.streamTotal > 0 ? `${this.streamTotal.toLocaleString('fr-FR')} streams` : 'Aucun stream');
         } catch (error) {
+            if (stale()) return;
             console.error('Streams API error:', error);
 
             const fallback = this.buildFallbackStreamsFromResults();
             if (!fallback.length) {
-                tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--danger);padding:1rem;">Erreur de chargement des streams: ${this.escapeHtml(error.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);padding:1rem;">Erreur de chargement des streams: ${this.escapeHtml(error.message)}</td></tr>`;
                 this.updateStreamsMetrics([], 0);
                 this.updateStreamsPaginationControls(0, 0, this.streamLimit);
                 this.streamsLoadedKey = '';
@@ -3219,9 +3286,28 @@ Réponds STRICTEMENT en JSON:
         }
     }
 
-    async showStreamDetails(streamId, streamIdentifier = '') {
+    renderStreamContent(data) {
+        const render=(value,label,kind)=>{
+            const block=value&&typeof value==='object'?value:{};
+            const text=block.is_binary?block.hex:block.raw;
+            const size=Number(block.size||0);
+            const preview=String(text||'').slice(0,65536);
+            return `<section class="stream-segment ${kind}"><div class="stream-segment-header"><strong>${label}</strong><span>${this.escapeHtml(String(size))} octets${block.is_binary?' · hexadécimal':''}</span></div><pre>${this.escapeHtml(preview||(size?'Données non disponibles dans cette réponse.':'Sans donnée applicative dans ce sens.'))}</pre>${block.truncated||String(text||'').length>65536?'<small>Aperçu tronqué.</small>':''}</section>`;
+        };
+        if(data.client_data||data.server_data){
+            const packets=Array.isArray(data.packets)?data.packets:[];
+            return `<h4 class="stream-content-heading">Données reconstituées · client / serveur</h4>${render(data.client_data,'Client → serveur','client')}${render(data.server_data,'Serveur → client','server')}<p class="support-evidence-note">Le texte provient du PCAP original. SYN, ACK, FIN et RST peuvent ne contenir aucune donnée applicative. Le contenu TLS chiffré reste illisible sans secrets compatibles.</p><details class="stream-packet-details"><summary>Chronologie TCP · ${packets.length} paquets affichés</summary><div class="table-wrapper"><table><thead><tr><th>Paquet</th><th>Sens</th><th>Flags</th><th>Données</th></tr></thead><tbody>${packets.map(pkt=>`<tr><td>Paquet ${this.escapeHtml(String(Number(pkt.idx)+1))}</td><td>${pkt.direction==='client'?'Client → serveur':'Serveur → client'}</td><td>${this.escapeHtml(String(pkt.flags||'—'))}</td><td>${this.escapeHtml(String(pkt.payload_size??0))} octets${!pkt.payload_size?' · Sans donnée applicative':''}</td></tr>`).join('')}</tbody></table></div></details>`;
+        }
+        const packets=Array.isArray(data.packets)?data.packets:[];
+        return packets.length?packets.map(pkt=>{const size=Number(pkt.payload_len??pkt.payload_size??0);return `<div class="stream-segment ${pkt.direction==='client_to_server'||pkt.direction==='client'?'client':'server'}"><div class="stream-segment-header">${this.escapeHtml(String(pkt.flags||'—'))} · ${size} octets</div><pre>${this.escapeHtml(String(pkt.payload||pkt.data||(size?'Données non disponibles dans cette réponse.':'Sans donnée applicative · contrôle TCP.')))}</pre></div>`;}).join(''):'<p>Aucun paquet extrait. Vérifiez la disponibilité du PCAP original.</p>';
+    }
+
+    async showStreamDetails(streamId, streamIdentifier = '', isCurrent = () => true) {
+        const taskId=this.currentTaskId, request=this.streamDetailRequest=(this.streamDetailRequest||0)+1;
+        const stale=()=>!isCurrent()||taskId!==this.currentTaskId||request!==this.streamDetailRequest;
         if (!this.currentTaskId) return;
 
+        const requestSignal=AbortSignal.timeout(15000);
         this.showToast('info', 'Chargement', 'Récupération des détails du stream...');
 
         try {
@@ -3235,7 +3321,7 @@ Réponds STRICTEMENT en JSON:
             let lastError = null;
             for (const url of urls) {
                 try {
-                    const response = await fetch(url, { cache: 'no-store' });
+                    const response = await fetch(url, { cache: 'no-store', signal:requestSignal });
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     data = await response.json();
                     break;
@@ -3247,6 +3333,7 @@ Réponds STRICTEMENT en JSON:
                 throw lastError || new Error('Stream indisponible');
             }
 
+            if(stale())return false;
             const container = document.getElementById('streamDetailContainer');
             const idSpan = document.getElementById('streamDetailId');
             const conversation = document.getElementById('streamConversation');
@@ -3267,7 +3354,7 @@ Réponds STRICTEMENT en JSON:
                     dst_port: data.dst_port,
                     packet_count: data.packet_count,
                     state: data.state || 'UNKNOWN',
-                    retransmissions: data.retransmissions || 0,
+                    retransmissions: data.retransmissions,
                     duration: data.duration,
                 };
                 const packets = Array.isArray(data.packets) ? data.packets : [];
@@ -3278,33 +3365,20 @@ Réponds STRICTEMENT en JSON:
                         <strong>Destination:</strong> ${this.escapeHtml(streamInfo.dst_ip || '?')}:${this.escapeHtml(streamInfo.dst_port || '?')}
                         <br><strong>Paquets:</strong> ${streamInfo.packet_count || packets.length || 0}
                         <strong>État:</strong> <span class="state-badge ${this.sanitizeClassToken(streamInfo.state || '')}">${this.escapeHtml(streamInfo.state || 'UNKNOWN')}</span>
-                        <strong>Retransmissions:</strong> ${streamInfo.retransmissions || 0}
-                        ${streamInfo.duration ? `<strong>Durée:</strong> ${this.escapeHtml(String(streamInfo.duration))}s` : ''}
+                        <strong>Retransmissions:</strong> ${this.escapeHtml(String(streamInfo.retransmissions ?? 'Non calculées'))}
+                        ${streamInfo.duration ? `<strong>Durée:</strong> ${Number.isFinite(Number(streamInfo.duration)) ? Number(streamInfo.duration).toFixed(3) : '—'} s` : ''}
                     </div>`;
 
-                if (packets.length > 0) {
-                    html += `<div class="stream-conversation">${packets.map(pkt => `
-                        <div class="stream-segment ${pkt.direction === 'client_to_server' || pkt.direction === 'client' ? 'client' : 'server'}">
-                            <div class="stream-segment-header">
-                                <span>${pkt.direction === 'client_to_server' || pkt.direction === 'client' ? '→ Client' : '← Server'}</span>
-                                <span>${this.escapeHtml(pkt.flags || '-')} | ${pkt.payload_len || pkt.payload_size || 0} bytes</span>
-                            </div>
-                            <pre>${this.escapeHtml(pkt.payload || pkt.data || '(payload non disponible)')}</pre>
-                        </div>
-                    `).join('')}</div>`;
-                } else {
-                    html += `<div style="text-align: center; padding: 2rem; color: var(--text-tertiary);">
-                        <p>📦 Aucun paquet extrait pour ce stream.</p>
-                        <p style="font-size: 0.85rem;">Le fichier PCAP original peut ne plus être disponible sur le serveur.</p>
-                    </div>`;
-                }
+                html += this.renderStreamContent(data);
 
                 conversation.innerHTML = html;
             }
 
             this.showToast('success', 'Stream', `Détails du stream #${streamId} chargés`);
+            return true;
 
         } catch (error) {
+            if(stale())return false;
             console.error('Stream details error:', error);
             this.showToast('error', 'Erreur', `Impossible de charger les détails du stream: ${error.message}`);
 
@@ -3316,8 +3390,10 @@ Réponds STRICTEMENT en JSON:
                     <p style="font-size: 0.85rem;">${error.message}</p>
                 </div>`;
             }
+            if(stale())return false;
             const container = document.getElementById('streamDetailContainer');
             if (container) container.style.display = 'block';
+            return false;
         }
     }
 
@@ -4382,9 +4458,9 @@ Réponds STRICTEMENT en JSON:
     /** Libellés FR explicites des classes de limitation de flux. */
     getFlowLimitationLabel(cls) {
         const labels = {
-            RECEIVER_LIMITED: 'Limité par le récepteur (fenêtre)',
-            NETWORK_LIMITED: 'Limité par le réseau (pertes)',
-            APPLICATION_LIMITED: "Limité par l'application (émetteur)",
+            RECEIVER_LIMITED: 'Piste : fenêtre du récepteur',
+            NETWORK_LIMITED: 'Piste réseau : retransmissions',
+            APPLICATION_LIMITED: "Piste : rythme de l’émetteur",
             UNDETERMINED: 'Facteur limitant indéterminé',
             UNKNOWN: 'Non classé',
         };
@@ -4421,7 +4497,7 @@ Réponds STRICTEMENT en JSON:
             points: Array.isArray(bandwidth.per_capture_point) ? bandwidth.per_capture_point : [],
             bandwidthSegments: Array.isArray(bandwidth.segments) ? bandwidth.segments : [],
             packetSegments: Array.isArray(packetMatch.segments) ? packetMatch.segments : [],
-            worstLossSegment: packetMatch.worst_loss_segment || results.summary?.worst_loss_segment || '',
+            worstLossSegment: packetMatch.worst_visibility_segment || packetMatch.worst_loss_segment || results.summary?.worst_loss_segment || '',
             worstDelaySegment: packetMatch.worst_delay_segment || results.summary?.worst_delay_segment || '',
             method: String(packetMatch.method || ''),
             summary: results.summary || {},
@@ -4449,6 +4525,7 @@ Réponds STRICTEMENT en JSON:
         }
 
         this.renderMultiClockWarning(data.packetSegments);
+        this.renderMultiEvidencePanel(data.packetSegments, this.multiPcapResults?.capture_points || []);
         this.renderMultiFlowLimitationChips(data.summary);
         this.renderMultiChainWaterfall(data);
         this.renderMultiBottleneckVerdict(data);
@@ -4459,35 +4536,45 @@ Réponds STRICTEMENT en JSON:
     renderMultiClockWarning(packetSegments) {
         const el = document.getElementById('multiClockWarning');
         if (!el) return;
+        const segments = Array.isArray(packetSegments) ? packetSegments : [];
+        el.style.display = segments.length ? 'flex' : 'none';
+        el.innerHTML = segments.length ? `<span class="bnk-alert-icon">⏱</span><div class="bnk-alert-body"><strong>Délais relatifs : aucune latence absolue déduite.</strong><div class="bnk-alert-detail">Les médianes sont centrées par sens. Le décalage brut mélange horloge et transit ; sa valeur ne mesure pas le seul décalage des horloges. La dérive d’horloge n’est pas estimée.</div></div>` : '';
+    }
 
-        const impacted = (Array.isArray(packetSegments) ? packetSegments : [])
-            .filter((seg) => seg && seg.clock_offset_warning === true);
-
-        if (!impacted.length) {
-            el.style.display = 'none';
-            el.innerHTML = '';
+    renderMultiEvidencePanel(segments, points) {
+        const host = document.getElementById('multiEvidencePanel');
+        if (!host) return;
+        host.innerHTML = '<h4>Preuves & qualité de la comparaison</h4>';
+        if (!segments.length) {
+            host.innerHTML += '<p>Aucune correspondance TCP data exploitable. Vérifiez captures, couverture et visibilité des flux ; aucun taux de perte n’est établi.</p>';
             return;
         }
+        const label = document.createElement('label'); label.textContent = 'Segment à examiner'; label.htmlFor = 'multiEvidenceSegment';
+        const select = document.createElement('select'); select.id = label.htmlFor;
+        segments.forEach((segment, index) => { const option = document.createElement('option'); option.value = index; option.textContent = segment.segment || `Segment ${index + 1}`; select.append(option); });
+        const body = document.createElement('div');
+        const render = () => { body.innerHTML = this.renderMultiSegmentEvidence(segments[Number(select.value)], points); };
+        select.addEventListener('change', render); host.append(label, select, body); render();
+    }
 
-        const details = impacted.map((seg) => {
-            const label = seg.segment
-                || `#${Number(seg.from_capture_index || 0) + 1} → #${Number(seg.to_capture_index || 0) + 1}`;
-            const offset = Number(seg.clock_offset_seconds);
-            const offsetTxt = Number.isFinite(offset) ? ` (décalage ≈ ${offset.toFixed(3)} s)` : '';
-            return `${this.escapeHtml(label)}${this.escapeHtml(offsetTxt)}`;
-        }).join(' • ');
-
-        el.style.display = 'flex';
-        el.innerHTML = `
-            <span class="bnk-alert-icon">⏱️</span>
-            <div class="bnk-alert-body">
-                <strong>Horloges non synchronisées&nbsp;: les délais sont relatifs.</strong>
-                <div class="bnk-alert-detail">
-                    Le décalage médian a été retiré segment par segment. Les valeurs de délai
-                    traduisent une <em>variation</em> (mise en file d'attente, gigue), pas une latence absolue.
-                </div>
-                <div class="bnk-alert-detail">Segment(s) concerné(s)&nbsp;: ${details}</div>
-            </div>`;
+    renderMultiSegmentEvidence(segment, points = []) {
+        if (!segment || segment.method_version !== 2) return '<p>Ancienne analyse : relancez Multi-PCAP pour obtenir les preuves par occurrence et les limites de couverture.</p>';
+        const esc = value => this.escapeHtml(String(value ?? '—'));
+        const metric = value => value === null || value === undefined ? 'Non mesurable' : esc(value);
+        const direction = value => value === 'client_to_server' ? 'Client → serveur' : 'Serveur → client';
+        const quality = [segment.from_capture_index, segment.to_capture_index].map(index => {
+            const point = points[index] || {}, coverage = point.coverage || {};
+            return `<div><strong>${esc(point.equipment_name || `Point ${index + 1}`)}</strong><span>${metric(point.packet_count)} paquets inspectés · ${metric(coverage.sampled_data_occurrences)} occurrences TCP data indexées</span><small>${coverage.packet_limit_reached || coverage.fingerprint_limit_reached || coverage.truncated_packets ? 'Couverture plafonnée ou trames tronquées' : 'Lecture complète du fichier dans les limites du moteur ; pertes du capteur inconnues'}</small></div>`;
+        }).join('');
+        const rows = (segment.evidence || []).map(row => `<tr><td>${esc(row.session_id)}</td><td>${direction(row.direction)}</td><td>${metric(row.from_frame)}</td><td>${metric(row.to_frame)}</td><td>${this.formatBottleneckMetric(row.relative_delta_ms, 'ms', 3)}</td><td>${row.state === 'not_observed_at_other_point' ? 'Non retrouvé au point B' : row.state === 'only_observed_at_other_point' ? 'Uniquement au point B' : row.pairing === 'occurrence_candidate' ? 'Répétition : candidat par ordre, délai exclu' : 'Signature unique concordante'}</td></tr>`).join('');
+        const directions = (segment.directions || []).map(row => `<tr><td>${direction(row.direction)}</td><td>${metric(row.reference_packets)}</td><td>${metric(row.matched_packets)}</td><td>${metric(row.unmatched_packets)}</td><td>${metric(row.right_only_packets)}</td><td>${metric(row.timing_sample_count)}</td></tr>`).join('');
+        return `<div class="multi-evidence-kpis"><div><span>Candidats appariés</span><strong>${metric(segment.matched_packets)}</strong></div><div><span>Non retrouvés au point B</span><strong>${metric(segment.unmatched_packets)}</strong></div><div><span>Occurrences ambiguës</span><strong>${metric(segment.ambiguous_packets)}</strong></div><div><span>Pertes réseau confirmées</span><strong>Non établies</strong></div></div>
+            <p>Confiance de corrélation : <strong>${esc(segment.confidence)}</strong>. Périmètre : occurrences TCP avec données indexées, pas tous les paquets. Les sens logiques sont conservés à travers le NAT ; une terminaison proxy/TCP ou une segmentation différente peut empêcher l’appariement.</p>
+            <div class="multi-evidence-coverage">${quality}</div>
+            <ul>${(segment.quality_warnings || []).map(message => `<li>${esc(message)}</li>`).join('')}</ul>
+            <div class="table-wrapper"><table><thead><tr><th>Sens</th><th>Point A</th><th>Appariés candidats</th><th>Non retrouvés B</th><th>Uniquement B</th><th>Paires temporelles univoques</th></tr></thead><tbody>${directions}</tbody></table></div>
+            <h5>Exemples de trames d’origine · échantillon limité à 12</h5><p>Les numéros de trame commencent à 1 dans chaque PCAP. Une répétition peut avoir plusieurs correspondances ; aucun délai individuel n’est alors affiché.</p>
+            <div class="table-wrapper"><table><thead><tr><th>Session</th><th>Sens</th><th>Trame A</th><th>Trame B</th><th>Variation relative</th><th>Observation</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
 
     /** Pastilles de répartition des facteurs limitants (flow_limitation_breakdown). */
@@ -4510,7 +4597,7 @@ Réponds STRICTEMENT en JSON:
         }
 
         el.style.display = 'flex';
-        el.innerHTML = `<span class="bnk-flow-legend">Pourquoi les flux ne vont pas plus vite&nbsp;:</span>`
+        el.innerHTML = `<span class="bnk-flow-legend">Hypothèses de limitation à vérifier&nbsp;:</span>`
             + entries.map((entry) => `
                 <span class="bnk-flow-chip bnk-flow-${this.sanitizeClassToken(entry.cls)}" title="${this.escapeHtml(entry.cls)}">
                     ${this.escapeHtml(this.getFlowLimitationLabel(entry.cls))}
@@ -4636,9 +4723,9 @@ Réponds STRICTEMENT en JSON:
             </div>
             <div class="bnk-seg-bar"><span style="width:${width.toFixed(1)}%"></span></div>
             <div class="bnk-seg-metrics">
-                <span>Perte paquets <strong>${this.formatBottleneckMetric(verdict.packet_loss_pct, '%')}</strong></span>
-                <span>Délai ajouté p95 <strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></span>
-                <span>Perte goodput <strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></span>
+                <span>Non-appariement TCP <strong>${this.formatBottleneckMetric(verdict.unmatched_packet_pct ?? verdict.packet_loss_pct, '%')}</strong></span>
+                <span>Dispersion relative p95−min <strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></span>
+                <span>Écart goodput <strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></span>
                 <span>Gigue file <strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></span>
                 <span>Confiance <strong>${this.escapeHtml(String(verdict.confidence || '-').toUpperCase())}</strong></span>
             </div>
@@ -4705,19 +4792,19 @@ Réponds STRICTEMENT en JSON:
                 </div>
             </div>
             <div class="bnk-verdict-metrics">
-                <div><span>Perte de paquets</span><strong>${this.formatBottleneckMetric(verdict.packet_loss_pct, '%')}</strong></div>
-                <div><span>Perte de goodput</span><strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></div>
-                <div><span>Délai ajouté p95</span><strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></div>
-                <div><span>Gigue de file</span><strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></div>
+                <div><span>Non-appariement TCP</span><strong>${this.formatBottleneckMetric(verdict.unmatched_packet_pct ?? verdict.packet_loss_pct, '%')}</strong></div>
+                <div><span>Écart de goodput</span><strong>${this.formatBottleneckMetric(verdict.goodput_loss_pct, '%')}</strong></div>
+                <div><span>Dispersion relative p95−min</span><strong>${this.formatBottleneckMetric(verdict.added_delay_p95_ms, 'ms', 1)}</strong></div>
+                <div><span>Dispersion relative</span><strong>${this.formatBottleneckMetric(verdict.queuing_jitter_ms, 'ms', 1)}</strong></div>
                 <div><span>Signature trafic</span><strong>${signature}</strong></div>
                 <div><span>Paquets appariés</span><strong>${pktSegment ? Number(pktSegment.matched_packets || 0).toLocaleString('fr-FR') : '-'}</strong></div>
             </div>
-            <h5 class="bnk-verdict-title">Pourquoi ce segment est incriminé</h5>
+            <h5 class="bnk-verdict-title">Pourquoi examiner ce segment</h5>
             ${reasonsHtml}
             <h5 class="bnk-verdict-title">Ce qu'il faut vérifier</h5>
             ${recoHtml}
             <div class="bnk-verdict-footer">
-                <span>Pire segment en pertes&nbsp;: <strong>${worstLoss}</strong></span>
+                <span>Plus grand écart de visibilité&nbsp;: <strong>${worstLoss}</strong></span>
                 <span>Pire segment en délai&nbsp;: <strong>${worstDelay}</strong></span>
             </div>`;
     }
@@ -5583,6 +5670,10 @@ Réponds STRICTEMENT en JSON:
     // ==================== PACKETS ====================
 
     async loadPackets(forceRefresh = false) {
+        const taskId = this.currentTaskId;
+        const generation = this.packetsRequestGeneration = (this.packetsRequestGeneration || 0) + 1;
+        const captureGeneration = this.captureRequestGeneration;
+        const stale = () => taskId !== this.currentTaskId || generation !== this.packetsRequestGeneration || captureGeneration !== this.captureRequestGeneration;
         if (!this.currentTaskId) return;
         if (!this.virtualScroll) {
             const container = document.getElementById('packetVirtualContainer');
@@ -5602,7 +5693,9 @@ Réponds STRICTEMENT en JSON:
 
         try {
             const response = await fetch(`/api/analysis/${this.currentTaskId}/packets?limit=10000`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            if (stale()) return;
             this.allPackets = data.packets || data || [];
 
             // Pre-compute index for fast filtering
@@ -5621,9 +5714,10 @@ Réponds STRICTEMENT en JSON:
             this.virtualScroll.setData(this.allPackets, (pkt, idx) => this.renderPacketRow(pkt, idx));
             this.updateFilterStats();
             this.setupResizableColumns();
-            this.packetsLoadedTaskId = this.currentTaskId;
+            this.packetsLoadedTaskId = taskId;
             this.setMenuHealthStatus('packets', this.allPackets.length > 0 ? 'ok' : 'missing', this.allPackets.length > 0 ? `${this.allPackets.length.toLocaleString('fr-FR')} paquets` : 'Aucun paquet');
         } catch (e) {
+            if (stale()) return;
             console.error('Error loading packets:', e);
             this.packetsLoadedTaskId = '';
             this.setMenuHealthStatus('packets', 'error', `Erreur paquets: ${e.message}`);
@@ -5819,6 +5913,7 @@ Réponds STRICTEMENT en JSON:
 
                 const onMove = (e) => {
                     th.style.width = Math.max(60, startWidth + e.clientX - startX) + 'px';
+                    this.virtualScroll?.render();
                 };
                 const onUp = () => {
                     resizer.classList.remove('resizing');
@@ -5841,11 +5936,11 @@ Réponds STRICTEMENT en JSON:
             textPrimary: isDark ? '#f8fafc' : '#0f172a',
             grid: isDark ? 'rgba(148,163,184,0.08)' : 'rgba(100,116,139,0.1)',
             tooltip: {
-                backgroundColor: isDark ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.96)',
+                backgroundColor: isDark ? 'rgba(16,24,36,0.98)' : 'rgba(255,255,255,0.96)',
                 borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
                 textStyle: { color: isDark ? '#f8fafc' : '#0f172a', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13 }
             },
-            colors: ['#0ea5a4', '#f97316', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#0ea5e9', '#64748b']
+            colors: ['#5d9bff', '#63d6bb', '#a18bfa', '#f0c47a', '#f17f96', '#69c8ef', '#8297b7', '#cc9be5']
         };
     }
 
@@ -6689,6 +6784,11 @@ Réponds STRICTEMENT en JSON:
         const tbody = document.querySelector('#dnsAnomaliesTable tbody');
         if (!tbody) return;
 
+        if (!anomalies.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Aucune anomalie DNS signalée par cette analyse.</td></tr>';
+            return;
+        }
+
         tbody.innerHTML = anomalies.slice(0, 10).map(a => `
             <tr>
                 <td>${this.escapeHtml(a.type || '-')}</td>
@@ -6702,7 +6802,9 @@ Réponds STRICTEMENT en JSON:
     // ==================== HTTP DISPLAY ====================
 
     displayHttpResults(http) {
-        http = this.applyGlobalFilterToHttp(http || {});
+        const tlsView=this.tlsHttpView;
+        if(tlsView?.task===this.currentTaskId&&tlsView.http)http=tlsView.http;
+        http = http?.source==='decrypted_tls'?http:this.applyGlobalFilterToHttp(http || {});
         const signature = this.buildHttpRenderSignature(http);
         const httpSummary = http.summary || {};
         const reqCount = Number(httpSummary.total_requests || (Array.isArray(http.requests) ? http.requests.length : 0));
@@ -6792,6 +6894,11 @@ Réponds STRICTEMENT en JSON:
         this.populateSniHostsTable(http?.tls?.sni_hosts || []);
         this.populateHttpRequestsTable(requests);
         this.populateHttpAnomaliesTable(http.anomalies || []);
+        if(http.source==='decrypted_tls'){
+            const hint=document.getElementById('httpDataHint');if(hint)hint.textContent=http.coverage_note;
+            const ua=document.querySelector('#userAgentsTable tbody');if(ua)ua.innerHTML='<tr><td colspan="3" class="empty-state">User-Agents non conservés dans le rapport TLS déchiffré.</td></tr>';
+            const anomalies=document.querySelector('#httpAnomaliesTable tbody');if(anomalies)anomalies.innerHTML='<tr><td colspan="4" class="empty-state">Diagnostic des anomalies de l’analyse initiale : sélectionnez cette source pour les consulter.</td></tr>';
+        }
         this.setMenuHealthStatus('http', (reqCount > 0 || tlsCount > 0) ? 'ok' : 'missing', (reqCount > 0 || tlsCount > 0) ? `${reqCount.toLocaleString('fr-FR')} HTTP / ${tlsCount.toLocaleString('fr-FR')} TLS` : 'Aucune donnée HTTP/TLS');
     }
 
@@ -7176,73 +7283,62 @@ Réponds STRICTEMENT en JSON:
     // ==================== HISTORY ====================
 
     async loadHistory() {
+        const generation = this.historyRequestGeneration = (this.historyRequestGeneration || 0) + 1;
+        window.PcapSupport?.setHistoryState('loading');
         try {
-            const response = await fetch('/api/history');
+            const response = await fetch('/api/history', {signal: AbortSignal.timeout(15000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-
-            this.displayHistory(data.history || []);
+            if (!Array.isArray(data.history)) throw new Error('Historique invalide');
+            if (generation !== this.historyRequestGeneration) return;
+            this.displayHistory(data.history);
+            window.PcapSupport?.setHistoryState('ready');
         } catch (error) {
+            if (generation !== this.historyRequestGeneration) return;
             console.error('Load history error:', error);
+            window.PcapSupport?.setHistoryState('error', 'Actualisation impossible. Les dernières données restent affichées ; réessayez.');
         }
     }
 
     displayHistory(history) {
-        const tbody = document.querySelector('#historyTable tbody');
-        const emptyState = document.getElementById('historyEmpty');
-
-        if (!history.length) {
-            if (tbody) tbody.innerHTML = '';
-            if (emptyState) emptyState.style.display = 'block';
-            return;
-        }
-
-        if (emptyState) emptyState.style.display = 'none';
-
-        if (tbody) {
-            tbody.innerHTML = history.map(item => `
-                <tr>
-                    <td>${this.escapeHtml(item.filename || '-')}</td>
-                    <td>${item.timestamp ? new Date(item.timestamp).toLocaleString('fr-FR') : '-'}</td>
-                    <td>${this.formatNumber(item.total_packets || 0)}</td>
-                    <td>${item.anomalies_count || 0}</td>
-                    <td><span class="risk-badge ${this.sanitizeClassToken(item.risk_level || 'NONE')}">${this.escapeHtml(item.risk_level || 'NONE')}</span></td>
-                    <td>
-                        <button class="action-btn view" onclick='analyzer.loadHistoryItem(${JSON.stringify(item.task_id || "")})'>👁️</button>
-                        <button class="action-btn delete" onclick='analyzer.deleteHistoryItem(${JSON.stringify(item.task_id || "")})'>🗑️</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
+        window.PcapSupport?.renderHistory(history, this);
     }
 
-    async loadHistoryItem(taskId) {
-        this.currentTaskId = taskId;
-        this.renderSignatures = { dns: '', http: '' };
-        this.streamsLoadedKey = '';
-        this.packetsLoadedTaskId = '';
-        this.streamsData = [];
-        this.allPackets = [];
-        this.filteredPackets = [];
-        this.packetIndex = { byProto: {}, byIp: {} };
-        this.showToast('info', 'Chargement', 'Récupération de l\'analyse...');
-
+    async loadHistoryItem(taskId, isCurrent = () => true) {
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(String(taskId || ''))) return false;
+        const captureGeneration = this.captureRequestGeneration || 0;
+        const generation = this.navigationRequestGeneration = (this.navigationRequestGeneration || 0) + 1;
+        const stale = () => generation !== this.navigationRequestGeneration || captureGeneration !== (this.captureRequestGeneration || 0);
+        this.showToast('info', 'Chargement', 'Récupération de l’analyse…');
         try {
-            const response = await fetch(`/api/analysis/${taskId}`);
+            const response = await fetch(`/api/analysis/${taskId}`, {signal: AbortSignal.timeout(30000)});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const results = await response.json();
-
+            if (stale() || !isCurrent()) return false;
+            this.captureRequestGeneration = captureGeneration + 1;
+            this.pollGeneration = (this.pollGeneration || 0) + 1;
+            if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
+            this.currentTaskId = taskId;
             this.currentResults = results;
-
+            this.renderSignatures = { dns: '', http: '' };
+            this.streamsLoadedKey = '';
+            this.packetsLoadedTaskId = '';
+            this.streamsData = [];
+            this.allPackets = [];
+            this.filteredPackets = [];
+            this.packetIndex = { byProto: {}, byIp: {} };
             document.getElementById('uploadSection').style.display = 'none';
             document.getElementById('resultsSection').style.display = 'block';
-
             this.displayResults(results);
-
-            // Double frame to let layout settle before chart resize
+            this.triggerTabDataLoad(this.currentTabId);
+            document.getElementById('resultsSection').scrollIntoView({block:'start',behavior:'auto'});
             this.requestChartsResize(2);
-
+            return true;
         } catch (error) {
+            if (stale() || !isCurrent()) return false;
             console.error('Load history item error:', error);
-            this.showToast('error', 'Erreur', 'Impossible de charger l\'analyse');
+            this.showToast('error', 'Chargement impossible', 'La capture actuelle est conservée. Réessayez dans un instant.');
+            return false;
         }
     }
 
@@ -7250,7 +7346,8 @@ Réponds STRICTEMENT en JSON:
         if (!confirm('Supprimer cette analyse ?')) return;
 
         try {
-            await fetch(`/api/delete/${taskId}`, { method: 'DELETE' });
+            const response = await fetch(`/api/delete/${taskId}`, { method: 'DELETE', signal: AbortSignal.timeout(15000) });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             this.showToast('success', 'Supprimé', 'Analyse supprimée');
             this.loadHistory();
         } catch (error) {
@@ -7400,7 +7497,9 @@ Réponds STRICTEMENT en JSON:
         });
     }
 
-    showPacketDetails(packetNum) {
+    showPacketDetails(packetNum, isCurrent = () => true) {
+        const taskId=this.currentTaskId, request=this.packetDetailRequest=(this.packetDetailRequest||0)+1;
+        const stale=()=>!isCurrent()||taskId!==this.currentTaskId||request!==this.packetDetailRequest;
         const OSI_LAYERS = [
             { key: 'l1_physical', num: 1, label: 'Physical', color: '#64748b', icon: '📡' },
             { key: 'l2_datalink', num: 2, label: 'Data Link', color: '#3b82f6', icon: '🔗' },
@@ -7411,11 +7510,12 @@ Réponds STRICTEMENT en JSON:
             { key: 'l7_application', num: 7, label: 'Application', color: '#06b6d4', icon: '📦' },
         ];
 
-        this.openModal(`Paquet #${packetNum} — Inspection OSI`, '<div class="loading-spinner"><div class="spinner"></div></div>');
+        this.openModal(`Paquet #${Number(packetNum) + 1} — Inspection OSI`, '<div class="loading-spinner"><div class="spinner"></div></div>');
 
-        fetch(`/api/analysis/${this.currentTaskId}/packet/${packetNum}`)
+        return fetch(`/api/analysis/${taskId}/packet/${packetNum}`, {signal:AbortSignal.timeout(15000)})
             .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
             .then(data => {
+                if(stale())return false;
                 const basic = data.basic_info || {};
                 const proto = basic.protocol || data.l4_transport?.protocol || '?';
                 const src = basic.src_ip ? `${basic.src_ip}${basic.src_port ? ':' + basic.src_port : ''}` : '?';
@@ -7508,13 +7608,16 @@ Réponds STRICTEMENT en JSON:
                     modalBody.innerHTML = html;
                     this.enrichModalMacVendors(modalBody);
                 }
+                return true;
             })
             .catch(() => {
+                if(stale())return false;
                 const modalBody = document.getElementById('modalBody');
                 if (modalBody) {
                     modalBody.innerHTML = '<p style="color:var(--danger);padding:1rem">Erreur de chargement du paquet.</p>';
                     this.enrichModalMacVendors(modalBody);
                 }
+                return false;
             });
     }
 
@@ -7728,6 +7831,8 @@ Réponds STRICTEMENT en JSON:
     }
 
     resetAnalysis() {
+        this.captureRequestGeneration = (this.captureRequestGeneration || 0) + 1;
+        this.pollGeneration = (this.pollGeneration || 0) + 1;
         // Arrêter le polling de statut avant de perdre le task_id
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
@@ -7993,7 +8098,7 @@ Réponds STRICTEMENT en JSON:
             const statusCls = data.available ? 'connected' : 'disconnected';
             const statusText = data.available
                 ? `Connecté (${models.length} modèle${models.length > 1 ? 's' : ''})`
-                : `Déconnecté${data.error ? `: ${data.error}` : ''}`;
+                : `Indisponible — aucun modèle joignable depuis le serveur de l’application`;
 
             const modelOptions = (models.length ? models : (model ? [model] : []))
                 .map(m => `<option value="${this.escapeHtml(m)}" ${m === model ? 'selected' : ''}>${this.escapeHtml(m)}</option>`)
@@ -8021,7 +8126,7 @@ Réponds STRICTEMENT en JSON:
                     </div>
                     <div class="ollama-config-actions">
                         <div class="ollama-config-help" id="ollamaConfigHelp">
-                            Renseigne l'IP/URL Ollama, teste la connexion, puis applique la config.
+                            Adresse accessible depuis le serveur de l’application. Sur Vercel, 127.0.0.1 ne désigne pas votre ordinateur. Testez la connexion avant d’appliquer.
                         </div>
                         <div style="display:flex;gap:0.5rem;">
                             <button class="btn btn-small" onclick="analyzer.refreshOllamaModels()">🔄 Tester</button>
@@ -8073,7 +8178,7 @@ Réponds STRICTEMENT en JSON:
             if (statusTextEl) {
                 statusTextEl.textContent = data.available
                     ? `Connecté (${models.length} modèle${models.length > 1 ? 's' : ''})`
-                    : `Déconnecté${data.error ? `: ${data.error}` : ''}`;
+                    : `Indisponible — aucun modèle joignable depuis le serveur de l’application`;
             }
             if (helpEl && data.available && models.length) {
                 helpEl.textContent = `Modèles détectés: ${models.slice(0, 4).join(', ')}${models.length > 4 ? '…' : ''}`;

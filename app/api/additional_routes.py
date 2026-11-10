@@ -4,7 +4,7 @@ Version corrigée avec accès direct aux résultats
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 from collections import defaultdict
@@ -2025,7 +2025,12 @@ def get_tls_audit(task_id: str):
 
 # ── Feature 8: IR Playbook ──
 class PlaybookRequest(BaseModel):
-    incident_types: Optional[List[str]] = None
+    incident_types: Optional[List[str]] = Field(default=None, min_length=1, max_length=14)
+
+@additional_router.get("/playbooks/catalog")
+def playbook_catalog():
+    from app.services.ir_playbook_service import IRPlaybookGenerator
+    return {"version": IRPlaybookGenerator.VERSION, "playbooks": IRPlaybookGenerator().catalog()}
 
 @additional_router.post("/{task_id}/generate-playbook")
 async def generate_playbook(task_id: str, request: Optional[PlaybookRequest] = None):
@@ -2034,8 +2039,20 @@ async def generate_playbook(task_id: str, request: Optional[PlaybookRequest] = N
     results = storage_service.load_results(task_id)
     if not results:
         raise HTTPException(status_code=404, detail="Task non trouvé")
+    # Use already computed, persisted diagnostics without launching analysis.
+    results = dict(results)
+    load_derived = getattr(storage_service, 'load_derived', None)
+    if callable(load_derived):
+        for name in ('flow_behavior', 'lateral_movement'):
+            if name not in results:
+                cached = load_derived(task_id, name)
+                if isinstance(cached, dict):
+                    results[name] = cached
     generator = IRPlaybookGenerator()
-    return generator.generate(results, (request.incident_types if request else None))
+    try:
+        return generator.generate(results, (request.incident_types if request else None))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from None
 
 
 # ── Feature 9: Threat Intelligence ──

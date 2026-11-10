@@ -39,9 +39,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR $APP_HOME
 
 # Installation des dépendances système runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     libpcap0.8 \
     libmagic1 \
+    tshark \
     tini \
     curl \
     && rm -rf /var/lib/apt/lists/* \

@@ -1,5 +1,6 @@
 import express from 'express';
 import { handleUpload } from '@vercel/blob/client';
+import { authorizeBrowserUpload } from './session.js';
 import { uploadPolicy } from './policy.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,14 @@ app.get('/cloud-assets/upload.js', (req, res) => res.sendFile(path.join(path.dir
 app.post('/api/cloud/upload-token', async (req, res) => {
  try {
   const result = await handleUpload({ body: req.body, request: req,
-   onBeforeGenerateToken: async pathname => uploadPolicy(pathname, req.headers.authorization, process.env.API_ACCESS_TOKEN),
+   onBeforeGenerateToken: async pathname => {
+    let authorization = req.headers.authorization;
+    if (process.env.WEB_AUTH_ENABLED === 'true') {
+      if (!(await authorizeBrowserUpload(req))) throw new Error('Session required');
+      authorization = `Bearer ${process.env.API_ACCESS_TOKEN}`;
+    }
+    return uploadPolicy(pathname, authorization, process.env.API_ACCESS_TOKEN);
+   },
    onUploadCompleted: async () => { /* Finalization is explicit and authenticated; no duplicate queue callback. */ },
   });
   res.json(result);

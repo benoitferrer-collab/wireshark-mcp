@@ -21,7 +21,7 @@ export async function uploadForm(form, apiPath, authorization) {
   if (!['pcap', 'pcapng', 'cap'].includes(extension)) throw new Error('Format PCAP non pris en charge');
   const blob = await upload(`captures/${taskId}/capture-${index}.${extension}`, file, {
    access: 'private', handleUploadUrl: '/api/cloud/upload-token',
-   headers: { Authorization: authorization }, contentType: 'application/octet-stream',
+   headers: authorization ? { Authorization: authorization } : { 'X-CSRF-Token': window.PCAP_IDENTITY?.csrf || '' }, contentType: 'application/octet-stream',
    multipart: file.size > 5 * 1024 * 1024,
   });
   captures.push({ ...metadata[index], pathname: blob.pathname, filename: file.name });

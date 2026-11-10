@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
 from statistics import median
 import math
+import hashlib
 
 from scapy.all import PcapReader, IP, IPv6, TCP, UDP, Dot1Q  # type: ignore
 
@@ -288,6 +289,8 @@ class MultiPcapAnalysisService:
         end_ts: Optional[float] = None
         # Budget d'empreintes pour l'appariement inter-captures (borne mémoire)
         fp_budget = [150_000]
+        packet_limit_reached = False
+        truncated_packets = 0
         # Série temporelle agrégée du point de capture (octets/s)
         capture_bins: Dict[int, int] = {}
 
@@ -296,9 +299,13 @@ class MultiPcapAnalysisService:
             for pkt in reader:
                 total_packets += 1
                 if total_packets > max_packets:
+                    total_packets -= 1
+                    packet_limit_reached = True
                     break
 
                 pkt_len = len(pkt)
+                if _safe_int(getattr(pkt, "wirelen", pkt_len), pkt_len) > pkt_len:
+                    truncated_packets += 1
                 total_bytes += pkt_len
                 ts = _safe_float(getattr(pkt, "time", 0.0), 0.0)
 
@@ -474,6 +481,7 @@ class MultiPcapAnalysisService:
                         flow, pkt, src_ip, src_port, dst_ip, dst_port, ts,
                         payload_len=payload_len, dstat=dstat, fp_budget=fp_budget,
                         ip_id=_safe_int(getattr(ip_layer, "id", 0), 0) if pkt.haslayer(IP) else 0,
+                        frame_number=total_packets,
                     )
 
         sessions_list = [self._finalize_session_record(k, s) for k, s in sessions.items()]
@@ -494,6 +502,9 @@ class MultiPcapAnalysisService:
             "position": capture.position,
             "comment": capture.comment,
             "packet_count": total_packets,
+            "coverage": {"scope": "capture_prefix", "packet_limit_reached": packet_limit_reached,
+                         "max_input_packets": max_packets, "fingerprint_limit_reached": fp_budget[0] == 0,
+                         "sampled_data_occurrences": 150_000 - fp_budget[0], "truncated_packets": truncated_packets},
             "byte_count": total_bytes,
             "capture_start_ts": start_ts,
             "capture_end_ts": end_ts,
@@ -517,6 +528,7 @@ class MultiPcapAnalysisService:
         dstat: Optional[Dict[str, Any]] = None,
         fp_budget: Optional[List[int]] = None,
         ip_id: int = 0,
+        frame_number: int = 0,
     ) -> None:
         tcp_layer = pkt[TCP]
         tcp = flow["tcp"]
@@ -589,15 +601,22 @@ class MultiPcapAnalysisService:
         ack_num = _safe_int(getattr(tcp_layer, "ack", 0), 0)
         seq_span = seq + payload_len + (1 if syn else 0) + (1 if fin else 0)
 
-        # Empreinte d'un paquet data: identifie le MÊME paquet aux différents
-        # points de capture (seq + taille + IP ID survivent au routage; l'IP ID
-        # peut être réécrit par du NAT, d'où sa faible pondération à l'appariement)
-        if payload_len > 0 and fp_budget is not None and fp_budget[0] > 0:
-            fp = (seq & 0xFFFFFFFF) ^ ((payload_len & 0xFFFF) << 32) ^ ((ip_id & 0xFFFF) << 48)
-            fp_dir = flow["fp_by_dir"].setdefault((src_ip, src_port, dst_ip, dst_port), {})
-            if fp not in fp_dir:
-                fp_dir[fp] = ts
-                fp_budget[0] -= 1
+        # IP addresses/ports/IP-ID are excluded so simple NAT/PAT can preserve
+        # correspondence. Hashes stay internal and never enter the result JSON.
+        if payload_len > 0 and fp_budget is not None:
+            if fp_budget[0] > 0:
+                captured_payload = self._captured_tcp_payload(tcp_layer, payload_len)
+                if captured_payload is None or _safe_int(getattr(pkt, 'wirelen', 0), 0) > len(pkt):
+                    flow['fingerprints_truncated'] = True
+                    captured_payload = None
+                if captured_payload is not None:
+                    digest = hashlib.blake2s(captured_payload, digest_size=8).digest()
+                    fp = (seq & 0xFFFFFFFF, payload_len, int(flags), digest)
+                    fp_dir = flow["fp_by_dir"].setdefault((src_ip, src_port, dst_ip, dst_port), {})
+                    fp_dir.setdefault(fp, []).append({'timestamp': ts, 'frame': frame_number})
+                    fp_budget[0] -= 1
+            else:
+                flow['fingerprints_truncated'] = True
 
         dir_key = (src_ip, src_port, dst_ip, dst_port)
         dir_state = tcp["direction_state"].setdefault(  # noqa: E501
@@ -634,6 +653,18 @@ class MultiPcapAnalysisService:
             else:
                 dir_state["last_ack"] = ack_num
                 dir_state["ack_repeat"] = 0
+
+    @staticmethod
+    def _captured_tcp_payload(tcp_layer, payload_len):
+        """Read original captured bytes, never reserialize Scapy TLS objects."""
+        original = getattr(tcp_layer, 'original', b'')
+        header = _safe_int(getattr(tcp_layer, 'dataofs', 5), 5) * 4
+        if isinstance(original, bytes) and header >= 20 and len(original) >= header + payload_len:
+            return original[header:header + payload_len]
+        raw = getattr(getattr(tcp_layer, 'payload', None), 'load', None)
+        if isinstance(raw, bytes) and len(raw) >= payload_len:
+            return raw[:payload_len]
+        return None
 
     def _safe_tcp_payload_len(self, pkt: Any, tcp_layer: Any) -> int:
         """
@@ -846,6 +877,7 @@ class MultiPcapAnalysisService:
             "theoretical_limits": limits,
             "timeseries_bytes": timeseries,
             "fp_by_dir": flow.get("fp_by_dir", {}),
+            "fingerprints_truncated": bool(flow.get("fingerprints_truncated")),
             "client_to_server_key": list(c2s_key),
             "server_to_client_key": list(s2c_key),
             "protocol": protocol,
@@ -908,12 +940,13 @@ class MultiPcapAnalysisService:
 
         # Précalcul des ensembles IP/ports par session: la corrélation compare
         # O(groupes × candidats) paires et reconstruisait 4 sets à chaque score
-        match_sets: Dict[int, Tuple[set, set]] = {}
+        match_sets: Dict[int, Tuple[set, ...]] = {}
         for cp in capture_points:
             for sess in cp.get("sessions", []):
                 ips = set(sess.get("participant_ips", []) or [])
                 ports = {int(p) for p in sess.get("participant_ports", []) if _safe_int(p, 0) > 0}
-                match_sets[id(sess)] = (ips, ports)
+                signatures = {key for values in (sess.get("fp_by_dir") or {}).values() for key in list(values)[:64]}
+                match_sets[id(sess)] = (ips, ports, signatures)
 
         # Seed groups from first capture
         groups: List[Dict[str, Any]] = []
@@ -996,7 +1029,7 @@ class MultiPcapAnalysisService:
         left: Dict[str, Any],
         right: Dict[str, Any],
         time_tolerance: float,
-        match_sets: Optional[Dict[int, Tuple[set, set]]] = None,
+        match_sets: Optional[Dict[int, Tuple[set, ...]]] = None,
     ) -> float:
         if str(left.get("protocol", "")).upper() != str(right.get("protocol", "")).upper():
             return -1.0
@@ -1098,6 +1131,16 @@ class MultiPcapAnalysisService:
         ):
             score += 10.0
 
+        # Payload evidence breaks ties between clients sharing a server behind NAT.
+        def signatures(record, cached):
+            return cached[2] if cached and len(cached) > 2 else {key for values in (record.get('fp_by_dir') or {}).values() for key in list(values)[:64]}
+        ls, rs = signatures(left, l_cached), signatures(right, r_cached)
+        complete = lambda record: not record.get('fingerprints_truncated') and all(len(values) <= 64 for values in (record.get('fp_by_dir') or {}).values())
+        if ls and rs:
+            if ls & rs:
+                score += 35.0
+            elif not same_client_ip and complete(left) and complete(right):
+                return min(score, 39.0)
         return score
 
     def _build_group_record(
@@ -1150,6 +1193,7 @@ class MultiPcapAnalysisService:
                         "theoretical_limits": obs.get("theoretical_limits", {}),
                         # Champ interne (préfixe _): retiré avant sérialisation
                         "_fp_by_dir": obs.get("fp_by_dir", {}),
+                        "fingerprints_truncated": bool(obs.get("fingerprints_truncated")),
                     }
                 )
 
@@ -1649,6 +1693,13 @@ class MultiPcapAnalysisService:
         rows = session.get("packet_match_by_segment") or []
         if not rows:
             return
+        if any(row.get('loss_assessment') == 'not_established' for row in rows):
+            session['visibility_observations'] = [
+                f"{row.get('unmatched_packets', 0)} occurrence(s) non retrouvée(s) entre les captures "
+                f"{row.get('from_capture_index', 0)+1} et {row.get('to_capture_index', 0)+1} ; perte réseau non démontrée."
+                for row in rows if row.get('unmatched_packets', 0)
+            ][:6]
+            return
 
         worst = max(rows, key=lambda r: _safe_float(r.get("loss_ratio"), 0.0))
         loss_pct = _safe_float(worst.get("loss_ratio"), 0.0) * 100.0
@@ -1881,7 +1932,7 @@ class MultiPcapAnalysisService:
         if retrans_ratio >= 0.01:
             return {
                 "class": "NETWORK_LIMITED",
-                "reason": f"Retransmissions à {round(retrans_ratio * 100, 2)}%: le réseau limite via les pertes.",
+                "reason": f"{round(retrans_ratio * 100, 2)}% de retransmissions observées : hypothèse réseau à vérifier, perte réelle non établie.",
                 "observed_mbps": round(observed, 4),
                 "window_limited_mbps": win_limit or None,
                 "loss_limited_mbps": loss_limit or None,
@@ -1897,7 +1948,7 @@ class MultiPcapAnalysisService:
         if win_limit > 0 and observed < win_limit * 0.3:
             return {
                 "class": "APPLICATION_LIMITED",
-                "reason": "Fenêtre disponible et peu de pertes: l'émetteur n'alimente pas le lien.",
+                "reason": "Fenêtre disponible et peu de retransmissions : rythme émetteur/applicatif à investiguer.",
                 "observed_mbps": round(observed, 4),
                 "window_limited_mbps": win_limit,
                 "loss_limited_mbps": loss_limit or None,
@@ -1942,14 +1993,15 @@ class MultiPcapAnalysisService:
                 score += 20
                 reasons.append(f"Baisse de goodput de {goodput_loss:.1f}% entre les deux points.")
 
-            pkt_loss_pct = _safe_float((pkt or {}).get("loss_ratio"), 0.0) * 100.0 if pkt else 0.0
+            observational = (pkt or {}).get('loss_assessment') == 'not_established'
+            pkt_loss_pct = _safe_float((pkt or {}).get("unmatched_ratio" if observational else "loss_ratio"), 0.0) * 100.0 if pkt else 0.0
             if pkt_loss_pct >= 2:
                 score += 35
-                reasons.append(f"{pkt_loss_pct:.2f}% des paquets amont n'atteignent jamais le point aval.")
+                reasons.append(f"{pkt_loss_pct:.2f}% des occurrences de référence ne sont pas retrouvées dans l’autre capture ; perte non démontrée.")
                 recommendations.append("Vérifier saturation, policing/ACL et erreurs d'interface sur ce segment.")
             elif pkt_loss_pct >= 0.5:
                 score += 18
-                reasons.append(f"Pertes localisées: {pkt_loss_pct:.2f}% des paquets disparaissent sur ce segment.")
+                reasons.append(f"Écart de visibilité: {pkt_loss_pct:.2f}% des occurrences ne sont pas appariées sur ce segment.")
 
             delay = (pkt or {}).get("relative_delay_ms") or {}
             delay_p95 = _safe_float(delay.get("p95"), 0.0)
@@ -1957,23 +2009,23 @@ class MultiPcapAnalysisService:
             added = delay_p95 - delay_min
             if added >= 100:
                 score += 30
-                reasons.append(f"Délai ajouté p95 de {added:.1f} ms (mise en file d'attente marquée).")
+                reasons.append(f"Variation temporelle p95−min de {added:.1f} ms ; cause à qualifier.")
                 recommendations.append("Suspicion de bufferbloat: contrôler les buffers/QoS de l'équipement aval.")
             elif added >= 30:
                 score += 15
-                reasons.append(f"Délai ajouté p95 de {added:.1f} ms sur ce segment.")
+                reasons.append(f"Variation temporelle p95−min de {added:.1f} ms entre points.")
 
             jitter = _safe_float((pkt or {}).get("queuing_jitter_ms"), 0.0)
             if jitter >= 50:
                 score += 12
-                reasons.append(f"Gigue de file d'attente de {jitter:.1f} ms.")
+                reasons.append(f"Dispersion temporelle relative de {jitter:.1f} ms.")
 
             # Signature shaper (délai sans perte) vs policer (perte sans délai)
             signature = None
-            if added >= 30 and pkt_loss_pct < 0.5:
+            if not observational and added >= 30 and pkt_loss_pct < 0.5:
                 signature = "SHAPING"
                 recommendations.append("Profil de shaping (file d'attente sans perte): vérifier les limites de débit configurées.")
-            elif pkt_loss_pct >= 2 and added < 10:
+            elif not observational and pkt_loss_pct >= 2 and added < 10:
                 signature = "POLICING"
                 recommendations.append("Profil de policing (pertes sans file d'attente): vérifier les rate-limiters/CAR.")
 
@@ -1991,9 +2043,11 @@ class MultiPcapAnalysisService:
                 "severity": severity,
                 "confidence": confidence,
                 "goodput_loss_pct": round(goodput_loss, 3),
-                "packet_loss_pct": round(pkt_loss_pct, 3),
-                "added_delay_p95_ms": round(added, 3),
-                "queuing_jitter_ms": round(jitter, 3),
+                "packet_loss_pct": None if observational else round(pkt_loss_pct, 3),
+                "unmatched_packet_pct": round(pkt_loss_pct, 3) if observational else None,
+                "loss_assessment": "not_established" if observational else "legacy_estimate",
+                "added_delay_p95_ms": None if observational and delay.get("p95") is None else round(added, 3),
+                "queuing_jitter_ms": None if observational and (pkt or {}).get("queuing_jitter_ms") is None else round(jitter, 3),
                 "traffic_shaping_signature": signature,
                 "reasons": reasons or ["Aucun signal de dégradation notable sur ce segment."],
                 "recommendations": recommendations,
@@ -2012,171 +2066,8 @@ class MultiPcapAnalysisService:
         sessions: List[Dict[str, Any]],
         max_samples_per_session: int = 2000,
     ) -> Dict[str, Any]:
-        """Retrouve le MÊME paquet aux points successifs de la chaîne.
-
-        Pour chaque session corrélée et chaque paire de points consécutifs, on
-        intersecte les empreintes (seq + taille + IP ID) par direction:
-          - paquet vu des deux côtés  -> échantillon de délai one-way (OWD)
-          - paquet vu en amont seulement -> perte imputée à ce segment
-
-        Les horloges des équipements n'étant pas synchronisées, le délai brut
-        contient un décalage constant. On le retire via la MÉDIANE des délais du
-        segment: les valeurs publiées sont donc des délais RELATIFS (variation,
-        jitter, gigue de file d'attente), pas des délais absolus.
-        """
-        seg_samples: Dict[Tuple[int, int], List[float]] = defaultdict(list)
-        seg_lost: Dict[Tuple[int, int], int] = defaultdict(int)
-        seg_matched: Dict[Tuple[int, int], int] = defaultdict(int)
-        seg_upstream: Dict[Tuple[int, int], int] = defaultdict(int)
-        per_session: Dict[str, List[Dict[str, Any]]] = {}
-
-        for session in sessions:
-            hops = {_safe_int(h.get("capture_index"), -1): h for h in session.get("hops", [])}
-            session_rows: List[Dict[str, Any]] = []
-
-            for idx in range(len(capture_points) - 1):
-                left, right = hops.get(idx), hops.get(idx + 1)
-                if not left or not right:
-                    continue
-
-                left_fp = left.get("_fp_by_dir") or {}
-                right_fp = right.get("_fp_by_dir") or {}
-                if not left_fp or not right_fp:
-                    continue
-
-                deltas: List[float] = []
-                matched = 0
-                lost = 0
-                upstream_total = 0
-
-                for dir_key, left_map in left_fp.items():
-                    # Direction identique attendue en aval; sinon (NAT) on
-                    # tente l'appariement toutes directions confondues
-                    right_map = right_fp.get(dir_key)
-                    if right_map is None:
-                        right_map = {}
-                        for cand in right_fp.values():
-                            right_map.update(cand)
-
-                    budget = max_samples_per_session
-                    for fp, l_ts in left_map.items():
-                        upstream_total += 1
-                        r_ts = right_map.get(fp)
-                        if r_ts is None:
-                            lost += 1
-                            continue
-                        matched += 1
-                        if budget > 0:
-                            deltas.append(float(r_ts) - float(l_ts))
-                            budget -= 1
-
-                if upstream_total == 0:
-                    continue
-
-                pair = (idx, idx + 1)
-                seg_samples[pair].extend(deltas[:max_samples_per_session])
-                seg_lost[pair] += lost
-                seg_matched[pair] += matched
-                seg_upstream[pair] += upstream_total
-
-                session_rows.append({
-                    "from_capture_index": idx,
-                    "to_capture_index": idx + 1,
-                    "matched_packets": matched,
-                    "lost_packets": lost,
-                    "upstream_packets": upstream_total,
-                    "loss_ratio": round(lost / float(upstream_total), 6),
-                    "_deltas": deltas,
-                })
-
-            if session_rows:
-                per_session[str(session.get("session_id"))] = session_rows
-
-        # Décalage d'horloge par segment = médiane des délais bruts
-        segments: List[Dict[str, Any]] = []
-        skew_by_pair: Dict[Tuple[int, int], float] = {}
-
-        for pair in sorted(set(list(seg_samples.keys()) + list(seg_upstream.keys()))):
-            a, b = pair
-            raw = seg_samples.get(pair, [])
-            upstream = seg_upstream.get(pair, 0)
-            matched = seg_matched.get(pair, 0)
-            lost = seg_lost.get(pair, 0)
-
-            skew = float(median(raw)) if raw else 0.0
-            skew_by_pair[pair] = skew
-            rel_ms = sorted((v - skew) * 1000.0 for v in raw)
-
-            # Gigue de file d'attente: écart entre le délai typique et le minimum
-            min_ms = rel_ms[0] if rel_ms else 0.0
-            p50 = _percentile(rel_ms, 50.0) if rel_ms else 0.0
-            p95 = _percentile(rel_ms, 95.0) if rel_ms else 0.0
-            p99 = _percentile(rel_ms, 99.0) if rel_ms else 0.0
-            jitter = round(p95 - min_ms, 3) if rel_ms else 0.0
-
-            # Confiance: nombre d'échantillons + dispersion + taux d'appariement
-            match_ratio = (matched / float(upstream)) if upstream > 0 else 0.0
-            if len(rel_ms) >= 50 and match_ratio >= 0.7 and (p95 - min_ms) < 100:
-                conf = "HIGH"
-            elif len(rel_ms) >= 10 and match_ratio >= 0.4:
-                conf = "MEDIUM"
-            else:
-                conf = "LOW"
-
-            segments.append({
-                "from_capture_index": a,
-                "to_capture_index": b,
-                "from_equipment": capture_points[a].get("equipment_name"),
-                "to_equipment": capture_points[b].get("equipment_name"),
-                "segment": f"{capture_points[a].get('equipment_name')} -> {capture_points[b].get('equipment_name')}",
-                "sample_count": len(rel_ms),
-                "matched_packets": matched,
-                "upstream_packets": upstream,
-                "match_ratio": round(match_ratio, 4),
-                "lost_packets": lost,
-                "loss_ratio": round(lost / float(upstream), 6) if upstream > 0 else 0.0,
-                "clock_offset_seconds": round(skew, 6),
-                "clock_offset_warning": abs(skew) > 1.0,
-                "relative_delay_ms": {
-                    "min": round(min_ms, 3),
-                    "p50": round(p50, 3),
-                    "p95": round(p95, 3),
-                    "p99": round(p99, 3),
-                    "max": round(rel_ms[-1], 3) if rel_ms else 0.0,
-                },
-                "queuing_jitter_ms": jitter,
-                "confidence": conf,
-            })
-
-        # Délais relatifs par session (après retrait du décalage du segment)
-        for rows in per_session.values():
-            for row in rows:
-                pair = (row["from_capture_index"], row["to_capture_index"])
-                skew = skew_by_pair.get(pair, 0.0)
-                deltas = row.pop("_deltas", [])
-                rel = sorted((v - skew) * 1000.0 for v in deltas)
-                row["relative_delay_ms"] = {
-                    "p50": round(_percentile(rel, 50.0), 3) if rel else None,
-                    "p95": round(_percentile(rel, 95.0), 3) if rel else None,
-                } if rel else {"p50": None, "p95": None}
-                row["sample_count"] = len(rel)
-
-        worst_loss = max(segments, key=lambda s: s.get("loss_ratio", 0.0), default=None)
-        worst_delay = max(
-            segments,
-            key=lambda s: _safe_float((s.get("relative_delay_ms") or {}).get("p95"), 0.0),
-            default=None,
-        )
-
-        return {
-            "segments": segments,
-            "per_session": per_session,
-            "worst_loss_segment": worst_loss.get("segment") if worst_loss else None,
-            "worst_delay_segment": worst_delay.get("segment") if worst_delay else None,
-            "method": "Appariement par empreinte (seq TCP + taille payload + IP ID). "
-                      "Les délais sont RELATIFS: le décalage d'horloge entre équipements "
-                      "est retiré via la médiane par segment.",
-        }
+        from app.services.multi_pcap_evidence import match_evidence
+        return match_evidence(capture_points, sessions, max_samples_per_session)
 
     # ------------------------------------------------------------------
     # Latency estimation

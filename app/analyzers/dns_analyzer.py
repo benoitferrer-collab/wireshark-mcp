@@ -322,20 +322,35 @@ class DNSAnalyzer(BaseAnalyzer):
 
     def _detect_anomalies(self):
         """Détecte les anomalies DNS"""
-        # 1. Taux de NXDOMAIN élevé (possible DGA)
+        # Resolution failures remain visible below the security alert threshold.
+        # Counts are exact; evidence is a bounded sample of retained responses.
         total_responses = self.response_count
-        if total_responses > 10:
-            nxdomain_count = self.response_codes.get('NXDOMAIN', 0)
-            nxdomain_rate = nxdomain_count / total_responses
-            if nxdomain_rate > 0.3:  # Plus de 30%
-                self._add_anomaly({
-                    'type': 'HIGH_NXDOMAIN_RATE',
-                    'severity': 'HIGH' if nxdomain_rate > 0.5 else 'MEDIUM',
-                    'description': f'Taux NXDOMAIN élevé: {nxdomain_rate*100:.1f}% ({nxdomain_count}/{total_responses})',
-                    'details': {'rate': nxdomain_rate, 'count': nxdomain_count},
-                    'recommendation': 'Possible Domain Generation Algorithm (DGA) - Vérifier les domaines interrogés'
-                })
-        
+        nxdomain_count = self.response_codes.get('NXDOMAIN', 0)
+        if nxdomain_count:
+            nxdomain_rate = nxdomain_count / total_responses if total_responses else 0
+            high_rate = total_responses > 10 and nxdomain_rate > 0.3
+            failed = [r for r in self.responses if r.get('rcode') == 'NXDOMAIN']
+            self._add_anomaly({
+                'type': 'HIGH_NXDOMAIN_RATE' if high_rate else 'NXDOMAIN_RESPONSES',
+                'severity': ('HIGH' if nxdomain_rate > 0.5 else 'MEDIUM') if high_rate else 'LOW',
+                'description': (
+                    f'Taux NXDOMAIN élevé: {nxdomain_rate*100:.1f}% ({nxdomain_count}/{total_responses})'
+                    if high_rate else
+                    f'{nxdomain_count} réponse(s) NXDOMAIN sur {total_responses} '
+                    f'({nxdomain_rate*100:.1f}%) : nom(s) DNS inexistant(s) signalé(s) par le résolveur'
+                ),
+                'details': {
+                    'rate': nxdomain_rate, 'count': nxdomain_count,
+                    'total_responses': total_responses,
+                    'packets': [{'packet_idx': r['packet_idx']} for r in failed[:10]],
+                    'evidence_complete': len(failed) == nxdomain_count and len(failed) <= 10,
+                },
+                'recommendation': (
+                    'Vérifier les noms interrogés, la zone DNS et le résolveur utilisé. '
+                    'Corréler avec le symptôme ; NXDOMAIN seul ne prouve pas une activité malveillante.'
+                )
+            })
+
         # 2. Détection de DNS Tunneling
         for domain, stats in self.domain_stats.items():
             # Sous-domaines très longs (tunneling)

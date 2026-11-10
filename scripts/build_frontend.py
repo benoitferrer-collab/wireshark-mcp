@@ -23,8 +23,19 @@ def build(output: Path):
         raise ValueError('Invalid build output directory')
     output.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ROOT / 'static', output / 'static', dirs_exist_ok=True)
-    replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3'}
+    replacements = {'app_name': 'PCAP Analyzer Pro', 'version': '2.0', 'max_file_size_gb': '3', 'max_file_size_label': '3 Go'}
     for name, filename in {
+        'tls_js': 'js/tls-decryption.js', 'tls_css': 'css/tls-decryption.css',
+        'engines_js': 'js/ai-engines.js',
+        'transactions_js': 'js/transactions.js', 'transactions_css': 'css/transactions.css',
+        'protocols_js': 'js/support-protocols.js', 'protocols_css': 'css/support-protocols.css',
+        'diagnosis_js': 'js/support-diagnosis.js', 'diagnosis_css': 'css/support-diagnosis.css',
+        'activity_js': 'js/activity-model.js', 'sharing_js': 'js/capture-sharing.js',
+        'demo_js': 'js/demo-tour.js',
+        'support_css': 'css/support-workspace.css', 'support_js': 'js/support-workspace.js',
+        'engineering_css': 'css/engineering.css', 'engineering_js': 'js/engineering-ui.js',
+        'evidence_js': 'js/evidence-links.js',
+        'nomios_css': 'css/nomios.css', 'identity_ui_js': 'js/identity-ui.js',
         'style_css': 'css/style.css', 'app_js': 'js/app.js',
         'advanced_features_js': 'js/advanced_features.js', 'connection_js': 'js/connection.js',
     }.items():
