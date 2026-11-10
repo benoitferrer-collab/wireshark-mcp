@@ -11,8 +11,8 @@ def create_cloud_router(storage, sender=None):
 
     async def send(task_id):
         if sender is not None: return await sender(task_id)
-        from vercel.queue import QueueClient, ALL_DEPLOYMENTS
-        queue = QueueClient(region=os.getenv('PCAP_QUEUE_REGION', 'iad1'), deployment=ALL_DEPLOYMENTS)
+        from vercel.queue import QueueClient
+        queue = QueueClient(region=os.getenv('PCAP_QUEUE_REGION', 'iad1'))
         return await queue.send('pcap-analysis', {'task_id': task_id}, idempotency_key=task_id, retention=86400)
 
     @router.post('/api/cloud/jobs')

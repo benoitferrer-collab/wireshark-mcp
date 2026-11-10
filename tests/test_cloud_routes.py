@@ -30,3 +30,17 @@ def test_delayed_analysis_reports_durable_queue_warning(tmp_path):
     assert result['waiting_delayed'] is True
     assert 'retardée' in result['message']
     assert result['status']=='queued'
+
+def test_push_publish_uses_current_deployment_partition(monkeypatch,tmp_path):
+    from vercel.queue import QueueClient
+    calls=[]
+    async def send(self,*args,**kwargs):
+        calls.append(self.deployment)
+    monkeypatch.setattr(QueueClient,'send',send)
+    monkeypatch.setenv('VERCEL_REGION','iad1')
+    objects=Objects();objects.data['captures/abc/source.pcap']=b'pcap'
+    app=FastAPI();app.include_router(create_cloud_router(create_cloud_storage(StorageService,objects,tmp_path)))
+    response=TestClient(app).post('/api/cloud/jobs',json={'task_id':'abc','captures':[{'pathname':'captures/abc/source.pcap','filename':'source.pcap'}]})
+    assert response.status_code==200,response.text
+    from vercel.queue import CURRENT_DEPLOYMENT
+    assert calls==[CURRENT_DEPLOYMENT]
