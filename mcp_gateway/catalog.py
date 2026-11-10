@@ -3,6 +3,7 @@ TOOLS = [
     {'name':name,'title':title,'category':category,'description':description,'access':'Lecture'}
     for name,title,category,description in [
         ('guide_investigation','Investigation guidée','Investigation','S’appuyer sur les preuves du PCAP pour proposer une question ciblée et la vérification suivante.'),
+        ('get_support_diagnosis','Diagnostic support corrélé','Diagnostic','Relier les signaux DNS/TCP/HTTP, leurs preuves et prochaines vérifications ; comparer une référence explicite.'),
         ('list_analyses','Captures disponibles','Lecture','Lister les analyses du périmètre partagé autorisé.'),
         ('get_analysis_summary','Synthèse de capture','Lecture','Totaux, sections disponibles et couverture de l’index.'),
         ('query_analysis','Preuves stockées','Lecture','Lire une section autorisée avec pointeur JSON et pagination.'),

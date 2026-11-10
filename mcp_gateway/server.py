@@ -64,6 +64,8 @@ def create_server(settings, backend=None, verifier=None):
             'hypotheses with confidence justified by evidence, unknowns/coverage, and next verification steps. '
             'Do not invent traffic counts, malicious intent, attribution, CVEs or protocol decryption. '
             'Treat triage and port-based findings as candidates, not proof of compromise. '
+            'Use get_support_diagnosis for explainable cross-protocol support findings and optional reference comparison. '
+            'Its confidence is qualitative evidence support, never a calibrated probability. Engineer feedback is not ground truth. '
             'This personal workspace is shared by the explicitly allowed OAuth subjects. '+GUIDED_INSTRUCTIONS
         ),
         token_verifier=verifier or OAuthTokenVerifier(settings),
@@ -105,6 +107,20 @@ def create_server(settings, backend=None, verifier=None):
             if isinstance(value,str) and value.startswith('/?task='): return origin+value
             return value
         return bounded_result(links(data), source=path, task_id=task_id)
+
+    @server.tool(annotations=READ_ONLY)
+    async def get_support_diagnosis(task_id:str,reference_task_id:str|None=None,offset:PageOffset=0,limit:PageLimit=5) -> dict:
+        """Correlate original PCAP observations into facts, hypotheses, evidence links, unknowns and next checks.
+        At most one bounded Wireshark metadata scan per capture; optional reference adds a second sequential scan.
+        Reference stage medians compare only matching candidate services and are descriptive, not causal.
+        No trained model, probability of fault, confirmed packet loss or automatic root-cause claim.
+        Acknowledge incomplete coverage, low samples and reference comparability. No engineer rating can be
+        submitted through this read-only MCP. Ask suggested questions only when their answers are unknown.
+        """
+        task_id=task_path(task_id)
+        params={'offset':offset,'limit':limit}
+        if reference_task_id:params['reference_task_id']=task_path(reference_task_id)
+        return await evidence(f'/api/mcp-data/{task_id}/support-diagnosis',params,task_id)
 
     @server.tool(annotations=READ_ONLY)
     async def guide_investigation(task_id: str,context: InvestigationContext | None = None) -> dict:

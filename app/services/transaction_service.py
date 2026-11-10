@@ -39,6 +39,19 @@ class TransactionService:
         if not 1 <= limit <= 25 or after_frame < 0:
             raise ValueError('Invalid transaction pagination')
         rows, coverage = self.engine.scan(path, 'dns || tcp')
+        return self.from_rows(rows, coverage, after_frame, limit)
+
+    @staticmethod
+    def from_rows(rows, coverage, after_frame=0, limit=10, *, internal_limit=None):
+        if not 1 <= limit <= 25 or after_frame < 0:
+            raise ValueError('Invalid transaction pagination')
+        internal_truncated=False
+        if internal_limit is not None:
+            if not isinstance(internal_limit, int) or not 1 <= internal_limit <= 5000:
+                raise ValueError('Invalid internal aggregation limit')
+            limit = internal_limit
+            internal_truncated=len(rows)>internal_limit
+            rows=rows[:internal_limit]
         frames = {r['frame_number']: r for r in rows}
         queries = {r['frame_number']: r for r in rows if r['dns_names'] and not r['dns_response']}
         dns_responses = {}
@@ -89,14 +102,16 @@ class TransactionService:
             for row in packets:
                 if row['http_status'] is not None and len(row['http_request_frames']) == 1:
                     responses.setdefault(row['http_request_frames'][0], row)
+            stream_resets=sum(r['tcp_reset'] for r in packets)
+            stream_retransmissions=sum(r['retransmission'] for r in packets)
             for request in requests or [origin]:
                 host = request['http_host'] or (hello['tls_server_name'] if hello else '')
                 record = {'anchor_frame': request['frame_number'], 'kind': 'http' if requests else 'tcp',
                           'host': host, 'client': endpoint(origin, 'src'), 'server': endpoint(origin, 'dst'),
                           'tcp_stream': stream_id, 'http_method': request['http_method'],
                           'http_status': None, 'dns_rcode': None,
-                          'resets': sum(r['tcp_reset'] for r in packets),
-                          'retransmissions': sum(r['retransmission'] for r in packets),
+                          'resets': stream_resets,
+                          'retransmissions': stream_retransmissions,
                           'endpoint_basis': 'syn' if syn else 'client_hello' if hello else 'request' if requests else 'first_observed_packet',
                           'stages': {key: blank() for key in STAGES}}
                 record['stages']['tcp'] = measured(syn, ack, 'SYN → ACK de fin de handshake visible. Mesure au point de capture, commune aux requêtes de cette connexion.')
@@ -123,6 +138,7 @@ class TransactionService:
         page = [item for item in records if item['anchor_frame'] > after_frame]
         selected = page[:limit]
         return {'data': selected, 'coverage': coverage, 'observed_transactions': len(records),
+                'aggregation_input_truncated':internal_truncated,
                 'next_after_frame': selected[-1]['anchor_frame'] if len(page) > limit else None,
                 'limitations': [
                     'Aucune somme DNS+TCP+TLS+HTTP : ces durées ne constituent pas une mesure de bout en bout.',

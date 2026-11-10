@@ -14,7 +14,7 @@ def test_overview_distinguishes_detection_from_validation_and_omits_secrets():
     assert result['mcp']['state']=='configuration_detected'
     assert result['litellm']['state']=='external'
     assert result['mcp']['authorization']=='subject_allowlist_and_scope'
-    assert len(result['tools'])==19
+    assert len(result['tools'])==20
     text=json.dumps(result)
     for value in env.values():
         if value not in {'entra'}: assert value not in text

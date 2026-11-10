@@ -29,6 +29,7 @@ def build(output: Path):
         'engines_js': 'js/ai-engines.js',
         'transactions_js': 'js/transactions.js', 'transactions_css': 'css/transactions.css',
         'protocols_js': 'js/support-protocols.js', 'protocols_css': 'css/support-protocols.css',
+        'diagnosis_js': 'js/support-diagnosis.js', 'diagnosis_css': 'css/support-diagnosis.css',
         'activity_js': 'js/activity-model.js', 'sharing_js': 'js/capture-sharing.js',
         'demo_js': 'js/demo-tour.js',
         'support_css': 'css/support-workspace.css', 'support_js': 'js/support-workspace.js',

@@ -148,6 +148,12 @@ from app.services.transaction_service import create_transaction_router
 app.include_router(create_transaction_router(storage_service))
 from app.services.support_protocols import create_support_protocol_router
 app.include_router(create_support_protocol_router(storage_service))
+from app.services.diagnosis_feedback import DiagnosisFeedbackStore
+from app.services.support_diagnosis_routes import create_support_diagnosis_router
+diagnosis_feedback_store = DiagnosisFeedbackStore(identity_store=identity_store) if WEB_IDENTITY else (
+    DiagnosisFeedbackStore(local_path=storage_service.upload_dir / 'support-feedback.sqlite3') if not CLOUD_MODE else None)
+storage_service.diagnosis_feedback_store = diagnosis_feedback_store
+app.include_router(create_support_diagnosis_router(storage_service, diagnosis_feedback_store, WEB_IDENTITY, local_mode=not CLOUD_MODE and not WEB_IDENTITY))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -168,6 +174,8 @@ async def root(request: Request):
         "transactions_css": _asset_version("css", "transactions.css"),
         "protocols_js": _asset_version("js", "support-protocols.js"),
         "protocols_css": _asset_version("css", "support-protocols.css"),
+        "diagnosis_js": _asset_version("js", "support-diagnosis.js"),
+        "diagnosis_css": _asset_version("css", "support-diagnosis.css"),
         "sharing_js": _asset_version("js", "capture-sharing.js"),
         "demo_js": _asset_version("js", "demo-tour.js"),
         "support_css": _asset_version("css", "support-workspace.css"),

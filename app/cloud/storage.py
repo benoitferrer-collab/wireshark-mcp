@@ -87,11 +87,11 @@ def create_cloud_storage(base_class, objects=None, root=None):
             finally: self._cleanup_if_deleted(task_id, keys)
         def delete_analysis(self, task_id):
             valid_id(task_id)
+            if getattr(self, 'diagnosis_feedback_store', None): self.diagnosis_feedback_store.delete_capture(task_id)
             self.objects.write_json(f'deleted/{task_id}.json', {'deleted': True})
             if getattr(self, 'tls_jobs', None): self.tls_jobs.delete_capture(task_id)
             keys = self.objects.keys(f'captures/{task_id}/') + self.objects.keys(f'results/{task_id}/')
             keys += [f'summaries/{task_id}.json', f'multi-summaries/{task_id}.json', f'jobs/{task_id}.json', f'status/{task_id}.json']
             self.objects.delete(keys)
-            super().delete_analysis(task_id)
-            return True
+            return super().delete_analysis(task_id)
     return CloudStorage()

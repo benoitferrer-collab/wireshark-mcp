@@ -257,6 +257,7 @@
 <link rel="stylesheet" href="/static/css/engineering.css?v={{ assets_version.engineering_css }}">
 <link rel="stylesheet" href="/static/css/transactions.css?v={{ assets_version.transactions_css }}">
 <link rel="stylesheet" href="/static/css/support-protocols.css?v={{ assets_version.protocols_css }}">
+<link rel="stylesheet" href="/static/css/support-diagnosis.css?v={{ assets_version.diagnosis_css }}">
 <link rel="stylesheet" href="/static/css/support-workspace.css?v={{ assets_version.support_css }}">
 </head>
 
@@ -346,7 +347,7 @@
 <p class="nomios-footnote">L’activité récente correspond à un appel reçu dans les 15 dernières minutes ; elle ne garantit pas qu’une session distante reste ouverte. Historique conservé 30 jours, sans contenu de capture ni conversation.</p>
 </section>
 <section id="nomiosAdmin" class="nomios-page" hidden aria-labelledby="nomiosAdminTitle"><div class="nomios-page-heading"><div><p class="nav-label">ADMINISTRATION</p><h2 id="nomiosAdminTitle">Un accès maîtrisé.</h2><p>Réservez l’espace d’analyse à votre groupe Microsoft Entra ID.</p></div></div>
-<div class="card nomios-admin-card"><h3>Accès Microsoft Entra ID</h3><label>Tenant<input id="nomiosTenant" readonly></label><form id="nomiosGroupForm"><label>Object ID du groupe autorisé<input id="nomiosGroupId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off"></label><p>Les membres du groupe partagent les captures et analyses de cet espace. Un champ vide réserve l’accès à l’administrateur.</p><button class="btn btn-primary" type="submit">Enregistrer le groupe</button><p id="nomiosGroupMessage" role="status"></p></form></div></section>
+<div class="card nomios-admin-card"><h3>Accès Microsoft Entra ID</h3><label>Tenant<input id="nomiosTenant" readonly></label><form id="nomiosGroupForm"><label>Object ID du groupe autorisé<input id="nomiosGroupId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" maxlength="36" autocomplete="off"></label><p>Les membres du groupe partagent les captures et analyses de cet espace. Un champ vide réserve l’accès à l’administrateur.</p><button class="btn btn-primary" type="submit">Enregistrer le groupe</button><p id="nomiosGroupMessage" role="status"></p></form></div><div class="card nomios-admin-card"><h3>Évaluation du moteur de diagnostic</h3><p>Export réservé à l’administrateur : 500 avis maximum, caractéristiques numériques et identifiants pseudonymisés. Les démonstrations identifiées sont exclues. Les avis doivent être arbitrés avant tout apprentissage.</p><a class="btn btn-secondary" href="/api/identity/support-learning-export" download="nomios-support-learning.json">Exporter les avis à qualifier</a></div></section>
             <!-- Upload Section -->
             <section class="upload-section" id="uploadSection">
                 <div class="support-welcome">
@@ -1875,7 +1876,7 @@
                     <div class="adv-loading" id="tcp-health-loading" style="display:none">
                         <div class="spinner"></div><span>Analyse avancée des métriques TCP...</span>
                     </div>
-                    <div class="sp-mode" role="group" aria-label="Périmètre Santé TCP"><button type="button" class="btn btn-secondary" data-health-mode="global" aria-pressed="true">Vue globale</button><button type="button" class="btn btn-secondary" data-health-mode="sessions" aria-pressed="false">Par session TCP</button></div><div id="sessionHealthContent" class="sp-view" hidden aria-live="polite"></div><div id="tcp-health-content">
+                    <details id="supportDiagnosisPanel" class="sd-panel"><summary>Diagnostic support corrélé<small>Observations → preuves → hypothèses → prochaines vérifications</small></summary><p class="sd-note">Lecture de la capture entière, à la demande. Comparez une référence prise dans des conditions similaires et qualifiez les constats avec vos ingénieurs.</p><div class="sd-toolbar"><label for="supportDiagnosisReference">Référence facultative</label><select id="supportDiagnosisReference"><option value="">Sans référence</option></select><button type="button" class="btn btn-primary" id="supportDiagnosisRun">Construire le diagnostic</button></div><p id="supportDiagnosisStatus" class="sd-note" role="status">Lecture à la demande du PCAP original · capture entière.</p><div id="supportDiagnosisResults" aria-live="polite"></div></details><div class="sp-mode" role="group" aria-label="Périmètre Santé TCP"><button type="button" class="btn btn-secondary" data-health-mode="global" aria-pressed="true">Vue globale</button><button type="button" class="btn btn-secondary" data-health-mode="sessions" aria-pressed="false">Par session TCP</button></div><div id="sessionHealthContent" class="sp-view" hidden aria-live="polite"></div><div id="tcp-health-content">
                         <div class="adv-summary-row" id="tcpHealthSummaryCards"></div>
                         <div class="card adv-panel full-width" id="tcpHealthFocusPanel">
                             <h3 id="tcpHealthFocusTitle">🔎 Focus métrique TCP</h3>
@@ -2081,6 +2082,7 @@
 <script defer src="/static/js/capture-sharing.js?v={{ assets_version.sharing_js }}"></script>
 <script defer src="/static/js/transactions.js?v={{ assets_version.transactions_js }}"></script>
 <script defer src="/static/js/support-protocols.js?v={{ assets_version.protocols_js }}"></script>
+<script defer src="/static/js/support-diagnosis.js?v={{ assets_version.diagnosis_js }}"></script>
 <script defer src="/static/js/ai-engines.js?v={{ assets_version.engines_js }}"></script>
 <script defer src="/static/js/identity-ui.js?v={{ assets_version.identity_ui_js }}"></script>
 <script defer src="/static/js/tls-decryption.js?v={{ assets_version.tls_js }}"></script>
